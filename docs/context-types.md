@@ -24,6 +24,7 @@ Imported by both main process and renderer. Contains all core interfaces and the
   messageCount: number
   tags: string[]
   title?: string           // user-provided slug name (e.g. 'feat_user_auth')
+  branch?: string          // git branch used for this session
   source?: 'app' | 'external'  // 'app' = launched from Claudia; only 'app' shown in UI
 }
 ```
@@ -58,6 +59,7 @@ Raw JSONL line shape. Key fields:
 - `type`: `'user' | 'assistant' | 'system' | 'result' | 'progress' | 'file-history-snapshot'`
 - `message`: `{ id, role, content, model, usage, stop_reason, ... }` — present on user/assistant entries
 - `cwd`: real filesystem path — **source of truth for project path** (present on user/assistant/progress)
+- `gitBranch`: current git branch name — **source of truth for session branch** (present on user/assistant/progress)
 - `sessionId`: matches filename (use this over `session_id`)
 - `uuid`: this entry's unique ID — used as `ClaudeMessage.id`
 - `parentUuid`: conversation tree linkage
@@ -111,6 +113,16 @@ Note: `cacheReadTokens`/`cacheCreationTokens`/`toolCallCount`/`durationMs` are c
 }
 ```
 
+### `SessionActivity` (renderer-only)
+```typescript
+{
+  type: string         // activity type (e.g., 'tool_use', 'thinking', etc.)
+  detail?: string      // optional activity details
+  timestamp: string    // ISO timestamp
+}
+```
+Defined in `src/renderer/src/stores/sessionStore.ts` and used for real-time session activity tracking. Auto-clears after 10 seconds via `event:sessionActivity` listener in App.tsx.
+
 ---
 
 ## IPC Channel Types (`IpcChannels`)
@@ -125,9 +137,11 @@ interface IpcChannels {
   'sessions:getCostSummary': (id) => SessionCostSummary | null
   'sessions:delete':      (id) => void
   'sessions:updateTitle': (id, title) => void
+  'sessions:updateStatus': (id, status) => void
   'sessions:addTag':      (id, tag) => void
   'sessions:removeTag':   (id, tag) => void
   'sessions:launchNew':   (opts: { projectPath, branch, name }) => { success; launchId?; error? }
+  'sessions:resetActive': () => void   // reset all active sessions to completed on app start
   'projects:list':        () => Project[]
   'settings:get':         () => AppSettings
   'settings:update':      (partial) => void
@@ -139,8 +153,11 @@ interface IpcChannels {
   // Push events (main → renderer)
   'event:sessionStarted': Session
   'event:sessionUpdated': Session
+  'event:sessionReplaced': { launchId: string; sessionId: string; session: Session }
   'event:messageAdded':   { sessionId; message: ClaudeMessage }
   'event:newSession':     Session
   'event:terminalLinked': { launchId: string; sessionId: string }
+  'event:sessionActivity': { sessionId: string; type: string; detail?: string; timestamp: string }
+  'event:terminal:exit':  { sessionId: string }
 }
 ```

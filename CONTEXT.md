@@ -147,7 +147,7 @@ window.api.sessions.*  · projects.*  · settings.*  · hooks.*
 ```
 
 **Push events** (main → renderer via `window.api.on`):
-`event:newSession` · `event:sessionUpdated` · `event:sessionStarted` · `event:sessionReplaced` · `event:terminalLinked` · `event:messageAdded` · `event:notification` · `event:claudeStreamEvent` · `event:claudeStreamError` · `event:claudeProcessExit` · `event:terminal:data` · `event:terminal:exit`
+`event:newSession` · `event:sessionUpdated` · `event:sessionStarted` · `event:sessionReplaced` · `event:terminalLinked` · `event:messageAdded` · `event:sessionActivity` · `event:notification` · `event:claudeStreamEvent` · `event:claudeStreamError` · `event:claudeProcessExit` · `event:terminal:data` · `event:terminal:exit`
 
 ---
 
@@ -167,15 +167,22 @@ Key interfaces: `Session` · `ClaudeMessage` · `ClaudeContent` (union) · `Tran
 ```typescript
 sessions · projects · selectedSessionId · messages (lazy, keyed by sessionId)
 settings · isLoading · sidebarView
-terminalSessionId    // current PTY key (starts as launchId, updated to realSessionId)
-terminalVisible      // controls GlobalTerminalPanel visibility
+activeTerminals: Set<string>      // tracks all PTY instances by sessionId
+hiddenTerminals: Set<string>      // tracks which terminals are hidden (per-terminal visibility)
+sessionActivity: Record<string, SessionActivity>  // real-time activity per session
 ```
-- `openTerminalForSession(id, path)` — creates PTY, sets `terminalVisible: true`
-- `launchSessionTerminal(launchId, path)` — creates PTY with placeholder ID, auto-writes `claude\r` after 600ms, sets session as selected
-- `resumeSession(id, path)` — creates PTY + writes `claude --resume <id>\r`, sets `terminalVisible: true`
-- `toggleTerminalVisible()` — show/hide the terminal panel
-- `linkTerminal(launchId, sessionId)` — swaps placeholder ID for real session ID on `event:terminalLinked`
-- `replaceSession(launchId, sessionId, session)` — replaces placeholder session with real session in array, updates selectedSessionId and terminalSessionId
+**Multiple concurrent terminals** — each session can have its own terminal, tracked independently.
+
+- `openTerminalForSession(id, path)` — creates PTY if not exists, makes visible (removes from hiddenTerminals)
+- `launchSessionTerminal(launchId, path)` — creates PTY with placeholder ID, auto-writes `claude\r` after 600ms, sets session as selected, adds to activeTerminals
+- `resumeSession(id, path, branch?)` — kills existing PTY if present, creates fresh one, writes `git checkout "<branch>" && claude --resume <id>\r` (or just resume if no branch)
+- `closeTerminal(sessionId)` — kills PTY, removes from activeTerminals and hiddenTerminals
+- `terminateTerminalSession(sessionId)` — kills PTY, updates session status to 'completed', removes from Sets
+- `toggleTerminalVisible(sessionId)` — toggles sessionId in hiddenTerminals Set (per-terminal visibility)
+- `removeActiveTerminal(sessionId)` — removes from both Sets (called on `event:terminal:exit`)
+- `linkTerminal(launchId, sessionId)` — swaps placeholder ID for real session ID in activeTerminals and hiddenTerminals Sets
+- `replaceSession(launchId, sessionId, session)` — replaces placeholder session with real session in array, updates selectedSessionId and terminal Sets
+- `setSessionActivity(sessionId, activity | null)` — updates sessionActivity map (auto-cleared after 10s)
 - `invalidateMessages(sessionId)` — deletes message cache and immediately reloads messages (fixes empty cache bug)
 
 **`utils/messageGrouper.ts`** — converts flat `ClaudeMessage[]` → `ConversationTurn[]` (groups consecutive assistant + tool_result_user entries; merges thinking/tools/text blocks).
@@ -282,6 +289,7 @@ The postinstall script (`electron-rebuild -f -w better-sqlite3,node-pty`) runs a
 - **Never access Node APIs directly from the renderer** — always go through `window.api.*`
 - **`node-pty` and `better-sqlite3` are native modules** — they must be rebuilt after `npm install` with `electron-rebuild`. If the app crashes on start, this is almost always the cause.
 - **`better-sqlite3` requires v11+** — v9 fails against Node 24 C++ headers used by Electron 29
+- **Multiple concurrent terminals** — the store uses `activeTerminals: Set<string>` and `hiddenTerminals: Set<string>` to track terminals independently. Each session can have its own terminal. `createTerminal()` does NOT kill existing terminals — caller must explicitly kill if reusing a sessionId.
 - **The `messages` map in the store is keyed by `sessionId`** — the lazy-load guard (`if (existing) return`) means messages won't refresh if you re-select a session. The store now auto-detects empty cache on `event:sessionUpdated` and calls `invalidateMessages()` to force reload when needed.
 - **Session status** is only set to `active` when a `SessionStart` hook fires. Without hooks installed, all sessions appear as `completed` even if Claude is currently running. Active sessions are auto-selected in the UI via `event:sessionStarted` listener.
 - **`decodeProjectPath`** does filesystem I/O (greedy `fs.existsSync` walk) — it's only called at scan time, not on hot paths.

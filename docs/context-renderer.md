@@ -9,12 +9,16 @@ All files live in `src/renderer/src/`. The renderer is a browser sandbox — no 
 **`main.tsx`** — Mounts `<App />` into `#root`.
 
 **`App.tsx`** — Root component. On mount:
-1. Calls `loadSessions()`, `loadProjects()`, `loadSettings()` from the store
-2. Subscribes to IPC events:
+1. Calls `sessions.resetActive()` to reset all active sessions to completed (prevents phantom active sessions on app restart)
+2. Calls `loadSessions()`, `loadProjects()`, `loadSettings()` from the store
+3. Subscribes to IPC events:
    - `event:newSession` → `addSession()`
-   - `event:sessionUpdated` → `updateSession()`
+   - `event:sessionUpdated` → `updateSession()` + auto-invalidates messages if cache is empty but session has messages
    - `event:sessionStarted` → `updateSession()` + if `status === 'active'`: auto-selects the session (terminal is already running from `sessions:launchNew` flow)
-   - `event:terminalLinked` → `linkTerminal(launchId, sessionId)` — swaps placeholder terminal ID for real session ID
+   - `event:sessionReplaced` → `replaceSession(launchId, sessionId, session)` — replaces placeholder session with real session
+   - `event:terminalLinked` → `linkTerminal(launchId, sessionId)` — swaps placeholder terminal ID for real session ID in Sets
+   - `event:terminal:exit` → `removeActiveTerminal(sessionId)` — removes terminal from tracking on exit
+   - `event:sessionActivity` → `setSessionActivity(sessionId, activity)` — updates real-time activity (auto-clears after 10s)
    - `event:messageAdded` → `addMessage()` (only for currently selected session) + `loadSessions()` to refresh cost/count
 
 Renders `<Sidebar />` + `<MainPanel />` side by side.
@@ -34,26 +38,41 @@ Single Zustand store (`useSessionStore`) holding all global UI state.
   settings:          AppSettings | null
   isLoading:         boolean
   sidebarView:       'sessions' | 'projects'
-  terminalSessionId: string | null      // PTY key; starts as launchId, updated to realSessionId
-  terminalVisible:   boolean            // controls GlobalTerminalPanel visibility
+  activeTerminals:   Set<string>        // tracks all PTY instances by sessionId
+  hiddenTerminals:   Set<string>        // tracks which terminals are hidden (per-terminal visibility)
+  sessionActivity:   Record<string, SessionActivity>  // real-time activity per session
 }
 ```
 
+**Multiple concurrent terminals** — each session can have its own terminal, tracked independently via Sets.
+
 ### Key action notes
 
-**`loadMessages(sessionId)`** — Lazy: skips if `messages[sessionId]` already exists. To force refresh, delete the cache entry first.
+**`loadMessages(sessionId)`** — Lazy: skips if `messages[sessionId]` already exists. To force refresh, call `invalidateMessages(sessionId)`.
+
+**`invalidateMessages(sessionId)`** — Deletes message cache and immediately reloads messages (fixes empty cache bug).
 
 **`selectSession(sessionId)`** — Sets `selectedSessionId` and triggers `loadMessages()`.
 
-**`openTerminalForSession(sessionId, projectPath)`** — Kills any previously open terminal (different session), calls `terminal:create`, sets `terminalSessionId` and `terminalVisible: true`. Does NOT auto-write any command (used for new sessions where Claude is already running).
+**`openTerminalForSession(sessionId, projectPath)`** — Creates PTY if not exists, makes visible (removes from hiddenTerminals). Does NOT kill existing terminals. Does NOT auto-write any command.
 
-**`resumeSession(sessionId, projectPath)`** — Like `openTerminalForSession` but also writes `claude --resume <sessionId>\r` after 500ms. Used for resuming existing sessions.
+**`launchSessionTerminal(launchId, projectPath)`** — Creates PTY with placeholder ID, auto-writes `claude\r` after 600ms, sets session as selected, adds to activeTerminals. Used for new session launches.
 
-**`closeTerminal()`** — Kills PTY, sets `terminalSessionId: null` and `terminalVisible: false`.
+**`resumeSession(sessionId, projectPath, branch?)`** — Kills existing PTY if present, creates fresh one, writes `git checkout "<branch>" && claude --resume <sessionId>\r` (or just resume if no branch) after 500ms. Adds to activeTerminals, makes visible.
 
-**`toggleTerminalVisible()`** — Toggles `terminalVisible`. Bound to the terminal button in `ChatHeader`.
+**`closeTerminal(sessionId)`** — Kills PTY, removes from activeTerminals and hiddenTerminals.
 
-**`linkTerminal(launchId, sessionId)`** — If `terminalSessionId === launchId`, updates it to `sessionId`. Called on `event:terminalLinked`.
+**`terminateTerminalSession(sessionId)`** — Kills PTY, updates session status to 'completed', removes from Sets. Full session termination.
+
+**`toggleTerminalVisible(sessionId)`** — Toggles sessionId in hiddenTerminals Set (per-terminal visibility). Bound to terminal button in `ChatHeader`.
+
+**`removeActiveTerminal(sessionId)`** — Removes from both Sets. Called on `event:terminal:exit`.
+
+**`linkTerminal(launchId, sessionId)`** — Swaps placeholder ID for real session ID in activeTerminals and hiddenTerminals Sets. Called on `event:terminalLinked`.
+
+**`replaceSession(launchId, sessionId, session)`** — Replaces placeholder session with real session in sessions array, updates selectedSessionId and terminal Sets. Called on `event:sessionReplaced`.
+
+**`setSessionActivity(sessionId, activity | null)`** — Updates sessionActivity map. Auto-cleared after 10s via timeout in App.tsx event listener.
 
 **`addSession(session)`** — Deduplicates by id before prepending.
 

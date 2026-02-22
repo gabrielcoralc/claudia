@@ -95,21 +95,21 @@ Uses `chokidar` to watch `~/.claude/projects/` at depth 2. Bridges file system e
 ```ts
 watchedFiles:    Map<transcriptPath, { sessionId, projectPath, transcriptPath, lastSize, lastLineCount }>
 watcher:         chokidar.FSWatcher | null
-pendingLaunches: Map<projectPath, { launchId: string, name: string }>
+pendingLaunches: Map<projectPath, { launchId: string, name: string, branch?: string }>
 ```
 
-Registered when the user launches a session from the dialog; consumed by HooksServer on `SessionStart` to rename the terminal. FileWatcher only *peeks* (read-only) to get the user name for the session title.
+Registered when the user launches a session from the dialog; consumed by HooksServer on `SessionStart` to rename the terminal. FileWatcher only *peeks* (read-only) to get the user name and branch for the session metadata.
 
 ### Exported launch helpers
 
-- **`registerPendingLaunch(projectPath, launchId, name)`** — stores a pending launch entry
+- **`registerPendingLaunch(projectPath, launchId, name, branch?)`** — stores a pending launch entry with optional branch
 - **`consumePendingLaunch(projectPath)`** — reads and deletes the entry (used by HooksServer)
-- **`peekPendingLaunch(projectPath)`** — read-only lookup (used by FileWatcher for the title)
+- **`peekPendingLaunch(projectPath)`** — read-only lookup (used by FileWatcher for title and branch)
 
 ### Lifecycle
 
 **`startFileWatcher(win)`**
-1. Starts chokidar watcher with `ignoreInitial: true` — **no startup import of existing sessions**
+1. Starts chokidar watcher with `ignoreInitial: true`, `usePolling: true, interval: 2000` — **no startup import of existing sessions**; polling mode for better compatibility across file systems
 2. Binds `onFileAdded` and `onFileChanged` handlers
 
 > `importExistingSessions()` is preserved in the file but not called. It will be used by the Phase 2 Import feature.
@@ -124,10 +124,14 @@ Reads `cwd` from first entry, calls `processNewTranscript()`.
 **`onFileChanged(filePath, win)`** — called when a known file grows  
 Reads only `messages.slice(watched.lastLineCount)` (new lines only), inserts them, updates cost, sends `event:messageAdded` and `event:sessionUpdated` to renderer.
 
-**`processNewTranscript(sessionId, projectPath, transcriptPath, win)`** — full parse  
-- Calls `peekPendingLaunch(projectPath)` to get the user-provided name (if session was launched from app)
-- Uses that name as `title`; falls back to `deriveSessionTitle(messages)` if not found
-- Creates `Session` with `status: 'completed'` and `source: 'app'`, upserts to DB, inserts all messages, sends `event:newSession`
+**`processNewTranscript(sessionId, projectPath, transcriptPath, win)`** — full parse
+- Parses transcript file to extract messages, costSummary, cwd, and gitBranch
+- Calls `peekPendingLaunch(projectPath)` to get the user-provided name and branch (if session was launched from app)
+- **Filters external sessions**: only processes if pending launch exists OR session already in DB (prevents external Claude Code sessions from appearing)
+- Uses pending name as `title` (or null to preserve existing title via COALESCE if session exists); falls back to `deriveSessionTitle(messages)` for new sessions
+- Uses `pending?.branch || gitBranch || undefined` for branch field
+- Preserves existing session status if session already exists; otherwise defaults to `'completed'`
+- Sets `source: 'app'`, upserts to DB, inserts all messages, sends `event:newSession` or `event:sessionUpdated`
 
 **`importExistingSessions(win)`** — preserved but not called at startup  
 For Phase 2 (Import feature). For each session from `scanClaudeProjects()`:
@@ -181,10 +185,12 @@ Lazy-loaded via `require('node-pty')` inside `getPty()` to avoid crashing if nat
 
 Internal: `terminals: Map<sessionId, { proc: IPty, cwd: string }>`
 
-- **`createTerminal(sessionId, cwd, win)`** — spawns `$SHELL` (default `/bin/zsh`) with `xterm-256color` at 120×36. Streams PTY output as `event:terminal:data`; cleans up on exit via `event:terminal:exit`. Kills any existing terminal for that session first.
+**Multiple concurrent terminals supported** — each session can have its own PTY instance. The renderer tracks active terminals via `activeTerminals: Set<string>` and visibility via `hiddenTerminals: Set<string>`.
+
+- **`createTerminal(sessionId, cwd, win)`** — spawns `$SHELL` (default `/bin/zsh`) with `xterm-256color` at 120×36. Streams PTY output as `event:terminal:data`. On exit, emits `event:terminal:exit` for renderer cleanup. **Does NOT kill existing terminal** — caller must explicitly kill if needed (allows multiple terminals per session if desired, though UI currently limits to one).
 - **`writeTerminal(sessionId, data)`** — forwards keystrokes to PTY
 - **`resizeTerminal(sessionId, cols, rows)`** — PTY resize on DOM resize
-- **`killTerminal(sessionId)`** — kills PTY, removes from map
+- **`killTerminal(sessionId)`** — kills PTY, removes from map, triggers `event:terminal:exit`
 - **`renameTerminal(oldId, newId)`** — moves PTY entry in the `terminals` Map without touching the process; used to swap `launchId` placeholder → real `sessionId` on `SessionStart`
 - **`killAllTerminals()`** — called on app quit
 - **`isTerminalRunning(sessionId)`** → boolean

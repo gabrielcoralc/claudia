@@ -23,10 +23,12 @@ window.api = {
     getCostSummary(id):                      Promise<SessionCostSummary | null>
     delete(id):                              Promise<void>
     updateTitle(id, title):                  Promise<void>
+    updateStatus(id, status):                Promise<void>
     addTag(id, tag):                         Promise<void>
     removeTag(id, tag):                      Promise<void>
     launchNew(opts: { projectPath, branch, name }):
                                              Promise<{ success: boolean; launchId?: string; error?: string }>
+    resetActive():                           Promise<void>   // reset all active sessions to completed
   },
 
   projects: {
@@ -85,14 +87,16 @@ Subscribed in the renderer via `window.api.on(channel, callback)`. The `on()` ca
 | `event:newSession` | `Session` | `FileWatcher` — new `.jsonl` file detected |
 | `event:sessionUpdated` | `Session` | `FileWatcher` — file changed; `HooksServer` — Stop/SessionEnd |
 | `event:sessionStarted` | `Session` | `HooksServer` — SessionStart hook (session now `active`) |
-| `event:terminalLinked` | `{ launchId: string; sessionId: string }` | `HooksServer` — emitted on SessionStart after `renameTerminal`; tells renderer to swap placeholder ID for real session ID |
+| `event:sessionReplaced` | `{ launchId: string; sessionId: string; session: Session }` | `HooksServer` — emitted on SessionStart; replaces placeholder session with real session in UI |
+| `event:terminalLinked` | `{ launchId: string; sessionId: string }` | `HooksServer` — emitted on SessionStart after `renameTerminal`; tells renderer to swap terminal ID |
 | `event:messageAdded` | `{ sessionId: string; message: ClaudeMessage }` | `FileWatcher` — new line in watched file |
+| `event:sessionActivity` | `{ sessionId: string; type: string; detail?: string; timestamp: string }` | `HooksServer` — real-time session activity updates (auto-clears after 10s) |
 | `event:notification` | `{ sessionId: string; message: string }` | `HooksServer` — Notification hook |
 | `event:claudeStreamEvent` | `{ pid: number; event: object }` | `ipc/handlers.ts` — stdout JSON line from spawned claude process |
 | `event:claudeStreamError` | `{ pid: number; error: string }` | `ipc/handlers.ts` — stderr from spawned claude process |
 | `event:claudeProcessExit` | `{ pid: number; code: number \| null }` | `ipc/handlers.ts` — spawned claude process exited |
 | `event:terminal:data` | `{ sessionId: string; data: string }` | `TerminalService` — PTY output chunk |
-| `event:terminal:exit` | `{ sessionId: string }` | `TerminalService` — PTY process exited |
+| `event:terminal:exit` | `{ sessionId: string }` | `TerminalService` — PTY process exited; triggers cleanup in renderer |
 
 ---
 
