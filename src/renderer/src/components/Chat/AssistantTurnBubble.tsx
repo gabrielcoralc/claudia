@@ -12,7 +12,9 @@ import {
   Edit,
   Search,
   Globe,
-  Wrench
+  Wrench,
+  MessageCircleQuestion,
+  ClipboardList
 } from 'lucide-react'
 import type { ClaudeThinkingContent, ClaudeToolUseContent } from '../../../../shared/types'
 import type { AssistantTurn, AssistantContentGroup, ToolPair } from '../../utils/messageGrouper'
@@ -296,7 +298,11 @@ function GroupedToolsBubble({ pairs }: { pairs: ToolPair[] }): React.JSX.Element
 
 // ─── Content group renderer ───────────────────────────────────────────────────
 
-function renderGroup(group: AssistantContentGroup, idx: number): React.JSX.Element | null {
+function renderGroup(
+  group: AssistantContentGroup,
+  idx: number,
+  opts?: { isLastText?: boolean; isQuestion?: boolean }
+): React.JSX.Element | null {
   if (group.kind === 'thinking') {
     return <GroupedThinkingBubble key={idx} blocks={group.blocks} />
   }
@@ -304,8 +310,22 @@ function renderGroup(group: AssistantContentGroup, idx: number): React.JSX.Eleme
     return <GroupedToolsBubble key={idx} pairs={group.pairs} />
   }
   if (group.kind === 'text') {
+    const isQuestionBlock = opts?.isLastText && opts?.isQuestion
     return (
-      <div key={idx} className="bg-claude-panel rounded-2xl rounded-tl-sm px-4 py-3 max-w-full w-full">
+      <div
+        key={idx}
+        className={`rounded-2xl rounded-tl-sm px-4 py-3 max-w-full w-full ${
+          isQuestionBlock
+            ? 'bg-amber-950/20 border border-amber-700/30'
+            : 'bg-claude-panel'
+        }`}
+      >
+        {isQuestionBlock && (
+          <div className="flex items-center gap-1.5 mb-2">
+            <MessageCircleQuestion size={13} className="text-amber-400" />
+            <span className="text-xs font-medium text-amber-400">Waiting for response</span>
+          </div>
+        )}
         <MarkdownRenderer text={group.text} />
       </div>
     )
@@ -322,14 +342,40 @@ interface Props {
 export default function AssistantTurnBubble({ turn }: Props): React.JSX.Element | null {
   if (turn.groups.length === 0) return null
 
+  // Find the index of the last text group for question highlighting
+  let lastTextIdx = -1
+  for (let i = turn.groups.length - 1; i >= 0; i--) {
+    if (turn.groups[i].kind === 'text') { lastTextIdx = i; break }
+  }
+
   return (
     <div className="flex gap-3 animate-fade-in flex-row">
-      <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 bg-claude-orange">
-        <Bot size={14} className="text-white" />
+      <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+        turn.isPlanResponse ? 'bg-violet-600' : 'bg-claude-orange'
+      }`}>
+        {turn.isPlanResponse
+          ? <ClipboardList size={14} className="text-white" />
+          : <Bot size={14} className="text-white" />
+        }
       </div>
 
       <div className="flex-1 max-w-3xl flex flex-col gap-2 items-start">
-        {turn.groups.map((group, i) => renderGroup(group, i))}
+        {turn.isPlanResponse && (
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-violet-400 bg-violet-950/30 border border-violet-700/30 rounded-full px-2 py-0.5">
+            <ClipboardList size={11} />
+            Plan Mode
+          </span>
+        )}
+        {turn.groups.map((group, i) => renderGroup(group, i, {
+          isLastText: i === lastTextIdx,
+          isQuestion: turn.isQuestion
+        }))}
+        {turn.isQuestion && !turn.groups.some(g => g.kind === 'text') && (
+          <div className="flex items-center gap-1.5 text-xs text-amber-400">
+            <MessageCircleQuestion size={13} />
+            <span>Waiting for response</span>
+          </div>
+        )}
 
         {turn.usage && (
           <div className="text-xs text-claude-muted">

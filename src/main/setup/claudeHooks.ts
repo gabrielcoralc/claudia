@@ -50,7 +50,9 @@ const HOOK_EVENTS = [
   'SessionStart',
   'Stop',
   'SessionEnd',
-  'Notification'
+  'Notification',
+  'PostToolUse',
+  'UserPromptSubmit'
 ]
 
 export function installHooks(): { success: boolean; error?: string } {

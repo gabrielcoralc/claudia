@@ -1,6 +1,12 @@
 import { create } from 'zustand'
 import type { Session, ClaudeMessage, Project, AppSettings } from '../../../shared/types'
 
+export interface SessionActivity {
+  type: string
+  detail?: string
+  timestamp: string
+}
+
 interface SessionStore {
   sessions: Session[]
   projects: Project[]
@@ -11,6 +17,7 @@ interface SessionStore {
   sidebarView: 'sessions' | 'projects'
   activeTerminals: Set<string>
   hiddenTerminals: Set<string>
+  sessionActivity: Record<string, SessionActivity>
 
   loadSessions: () => Promise<void>
   loadProjects: () => Promise<void>
@@ -34,6 +41,7 @@ interface SessionStore {
   removeActiveTerminal: (sessionId: string) => void
   linkTerminal: (launchId: string, sessionId: string) => void
   replaceSession: (launchId: string, sessionId: string, session: Session) => void
+  setSessionActivity: (sessionId: string, activity: SessionActivity | null) => void
 }
 
 export const useSessionStore = create<SessionStore>((set, get) => ({
@@ -46,6 +54,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   sidebarView: 'sessions',
   activeTerminals: new Set<string>(),
   hiddenTerminals: new Set<string>(),
+  sessionActivity: {},
 
   loadSessions: async () => {
     set({ isLoading: true })
@@ -305,6 +314,18 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         nextHidden.add(sessionId)
       }
       return { activeTerminals: next, hiddenTerminals: nextHidden }
+    })
+  },
+
+  setSessionActivity: (sessionId, activity) => {
+    set(state => {
+      const next = { ...state.sessionActivity }
+      if (activity) {
+        next[sessionId] = activity
+      } else {
+        delete next[sessionId]
+      }
+      return { sessionActivity: next }
     })
   },
 

@@ -62,7 +62,9 @@ export async function startFileWatcher(win: BrowserWindow): Promise<void> {
     ignored: /(^|[/\\])\../,
     persistent: true,
     ignoreInitial: true,
-    depth: 2
+    depth: 2,
+    usePolling: true,
+    interval: 2000
   })
 
   watcher

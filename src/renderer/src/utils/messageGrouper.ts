@@ -29,6 +29,8 @@ export interface AssistantTurn {
   messages: ClaudeMessage[]
   groups: AssistantContentGroup[]
   usage?: ClaudeMessage['usage']
+  isPlanResponse?: boolean
+  isQuestion?: boolean
 }
 
 export type ConversationTurn = UserTurn | AssistantTurn
@@ -148,6 +150,9 @@ export function groupMessages(messages: ClaudeMessage[]): ConversationTurn[] {
     pendingAssistant = null
   }
 
+  // Track the permissionMode of the last real_user message
+  let lastUserPermissionMode: string | undefined
+
   for (const msg of messages) {
     const kind = classifyMessage(msg)
 
@@ -157,7 +162,8 @@ export function groupMessages(messages: ClaudeMessage[]): ConversationTurn[] {
           kind: 'assistant',
           messages: [],
           groups: [],
-          usage: undefined
+          usage: undefined,
+          isPlanResponse: lastUserPermissionMode === 'plan'
         }
       }
       pendingAssistant.messages.push(msg)
@@ -174,14 +180,35 @@ export function groupMessages(messages: ClaudeMessage[]): ConversationTurn[] {
       // Do NOT flush — more assistant entries may follow
 
     } else {
-      // real_user
+      // real_user — mark the previous assistant turn as a question if its last text ends with '?'
+      if (pendingAssistant) {
+        markQuestionIfNeeded(pendingAssistant)
+      }
       flushAssistant()
+      lastUserPermissionMode = msg.permissionMode
       turns.push({ kind: 'user', message: msg })
     }
   }
 
-  // Flush any remaining assistant turn at end of transcript
+  // The last assistant turn (no following user) could also be a question
+  if (pendingAssistant) {
+    markQuestionIfNeeded(pendingAssistant)
+  }
   flushAssistant()
 
   return turns
+}
+
+function markQuestionIfNeeded(turn: AssistantTurn): void {
+  // Find the last text group in the turn
+  for (let i = turn.groups.length - 1; i >= 0; i--) {
+    const group = turn.groups[i]
+    if (group.kind === 'text') {
+      const trimmed = group.text.trim()
+      if (trimmed.endsWith('?')) {
+        turn.isQuestion = true
+      }
+      return
+    }
+  }
 }

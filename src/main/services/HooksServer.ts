@@ -125,6 +125,49 @@ function handleHookEvent(event: Record<string, unknown>, win: BrowserWindow): vo
     case 'SessionEnd': {
       if (sessionId) {
         markSessionCompleted(sessionId)
+        win.webContents.send('event:sessionActivity', {
+          sessionId,
+          type: hookEvent === 'Stop' ? 'stopped' : 'session_ended',
+          timestamp: new Date().toISOString()
+        })
+        refreshSession(sessionId, win).then(() => {
+          const session = sessionDb.getById(sessionId)
+          if (session) {
+            win.webContents.send('event:sessionUpdated', session)
+          }
+        })
+      }
+      break
+    }
+
+    case 'PostToolUse': {
+      if (sessionId) {
+        const toolName = event.tool_name as string | undefined
+        console.log(`[HooksServer] PostToolUse session=${sessionId} tool=${toolName}`)
+        win.webContents.send('event:sessionActivity', {
+          sessionId,
+          type: 'tool_completed',
+          detail: toolName,
+          timestamp: new Date().toISOString()
+        })
+        refreshSession(sessionId, win).then(() => {
+          const session = sessionDb.getById(sessionId)
+          if (session) {
+            win.webContents.send('event:sessionUpdated', session)
+          }
+        })
+      }
+      break
+    }
+
+    case 'UserPromptSubmit': {
+      if (sessionId) {
+        console.log(`[HooksServer] UserPromptSubmit session=${sessionId}`)
+        win.webContents.send('event:sessionActivity', {
+          sessionId,
+          type: 'user_prompt',
+          timestamp: new Date().toISOString()
+        })
         refreshSession(sessionId, win).then(() => {
           const session = sessionDb.getById(sessionId)
           if (session) {

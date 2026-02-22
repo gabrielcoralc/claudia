@@ -5,7 +5,7 @@ import AssistantTurnBubble from './AssistantTurnBubble'
 import { groupMessages, classifyMessage } from '../../utils/messageGrouper'
 import type { Session, ClaudeMessage } from '../../../../shared/types'
 import type { ClaudeToolUseContent } from '../../../../shared/types'
-import { Search } from 'lucide-react'
+import { Search, Wrench, MessageCircle, Square, LogOut } from 'lucide-react'
 
 type FilterType = 'all' | 'user' | 'claude' | 'tools' | 'files' | 'questions'
 
@@ -50,9 +50,25 @@ const FILTERS: { key: FilterType; label: string }[] = [
   { key: 'questions', label: 'Questions' },
 ]
 
+function activityLabel(type: string, detail?: string): { icon: React.ReactNode; text: string } {
+  switch (type) {
+    case 'tool_completed':
+      return { icon: <Wrench size={12} className="text-blue-400" />, text: detail ? `Completed ${detail}` : 'Tool completed' }
+    case 'user_prompt':
+      return { icon: <MessageCircle size={12} className="text-green-400" />, text: 'User prompt submitted' }
+    case 'stopped':
+      return { icon: <Square size={12} className="text-claude-orange" />, text: 'Claude finished responding' }
+    case 'session_ended':
+      return { icon: <LogOut size={12} className="text-claude-muted" />, text: 'Session ended' }
+    default:
+      return { icon: null, text: type }
+  }
+}
+
 export default function LogsTab({ session }: Props): React.JSX.Element {
-  const { messages, loadMessages } = useSessionStore()
+  const { messages, loadMessages, sessionActivity } = useSessionStore()
   const sessionMessages = messages[session.id] ?? []
+  const activity = sessionActivity[session.id]
   const bottomRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [autoScroll, setAutoScroll] = useState(true)
@@ -157,6 +173,17 @@ export default function LogsTab({ session }: Props): React.JSX.Element {
           </button>
         )}
       </div>
+
+      {/* Real-time activity status bar */}
+      {activity && (
+        <div className="shrink-0 px-4 py-2 border-t border-claude-border bg-claude-sidebar flex items-center gap-2 animate-fade-in">
+          <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+          {activityLabel(activity.type, activity.detail).icon}
+          <span className="text-xs text-claude-muted">
+            {activityLabel(activity.type, activity.detail).text}
+          </span>
+        </div>
+      )}
     </div>
   )
 }

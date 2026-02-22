@@ -16,7 +16,8 @@ export default function App(): React.JSX.Element {
     linkTerminal,
     removeActiveTerminal,
     replaceSession,
-    invalidateMessages
+    invalidateMessages,
+    setSessionActivity
   } = useSessionStore()
 
   useEffect(() => {
@@ -75,6 +76,23 @@ export default function App(): React.JSX.Element {
       }
     )
 
+    const offSessionActivity = window.api.on(
+      'event:sessionActivity',
+      (data: unknown) => {
+        const { sessionId, type, detail, timestamp } = data as {
+          sessionId: string; type: string; detail?: string; timestamp: string
+        }
+        setSessionActivity(sessionId, { type, detail, timestamp })
+        // Clear activity after 10 seconds if no new event arrives
+        setTimeout(() => {
+          const current = useSessionStore.getState().sessionActivity[sessionId]
+          if (current && current.timestamp === timestamp) {
+            setSessionActivity(sessionId, null)
+          }
+        }, 10000)
+      }
+    )
+
     return () => {
       offNewSession()
       offSessionUpdated()
@@ -83,6 +101,7 @@ export default function App(): React.JSX.Element {
       offTerminalLinked()
       offTerminalExit()
       offMessageAdded()
+      offSessionActivity()
     }
   }, [])
 

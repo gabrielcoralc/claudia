@@ -71,6 +71,7 @@ export interface ClaudeMessage {
   role: ClaudeMessageRole
   content: ClaudeContent[]
   timestamp: string
+  permissionMode?: string
   usage?: {
     input_tokens: number
     output_tokens: number
@@ -105,6 +106,8 @@ export interface TranscriptEntry {
   // Tool result fields (on user entries that return tool output)
   toolUseResult?: string             // duplicate of message.content[].content for tool results
   sourceToolAssistantUUID?: string   // points to the assistant entry that called the tool
+  // Permission mode (on user entries: 'default', 'plan', 'acceptEdits', 'bypassPermissions')
+  permissionMode?: string
   // Legacy / hooks fields
   result?: string
   subtype?: string
@@ -195,11 +198,15 @@ export interface IpcChannels {
     branch: string
     name: string
   }) => { success: boolean; launchId?: string; error?: string }
+  'sessions:resetActive': () => void
 
   // Events (main -> renderer)
   'event:sessionStarted': Session
   'event:sessionUpdated': Session
+  'event:sessionReplaced': { launchId: string; sessionId: string; session: Session }
   'event:messageAdded': { sessionId: string; message: ClaudeMessage }
   'event:newSession': Session
   'event:terminalLinked': { launchId: string; sessionId: string }
+  'event:sessionActivity': { sessionId: string; type: string; detail?: string; timestamp: string }
+  'event:terminal:exit': { sessionId: string }
 }

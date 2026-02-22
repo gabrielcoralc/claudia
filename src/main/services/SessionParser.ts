@@ -147,6 +147,9 @@ export async function parseTranscriptFile(transcriptPath: string): Promise<{
           if (block.type === 'tool_use') toolCallCount++
         }
 
+        // Read permissionMode from user entries (e.g. 'plan', 'default', 'acceptEdits')
+        const permissionMode = entry.permissionMode
+
         const message: ClaudeMessage = {
           // Use entry.uuid (unique per JSONL line) NOT msg.id.
           // A single Claude API response is split into multiple JSONL entries
@@ -157,6 +160,7 @@ export async function parseTranscriptFile(transcriptPath: string): Promise<{
           role: msg.role,
           content,
           timestamp: entry.timestamp || new Date().toISOString(),
+          permissionMode: permissionMode || undefined,
           usage: msg.usage
         }
         messages.push(message)

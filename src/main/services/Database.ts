@@ -93,6 +93,12 @@ function initSchema(db: Database.Database): void {
     // Column already exists — safe to ignore
   }
 
+  try {
+    db.exec(`ALTER TABLE messages ADD COLUMN permission_mode TEXT`)
+  } catch {
+    // Column already exists — safe to ignore
+  }
+
   const existingSettings = db.prepare('SELECT key FROM settings WHERE key = ?').get('app_settings')
   if (!existingSettings) {
     db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run(
@@ -212,15 +218,16 @@ export const messageDb = {
   insert(message: ClaudeMessage): void {
     const db = getDb()
     db.prepare(`
-      INSERT OR IGNORE INTO messages (id, session_id, role, content, timestamp, usage)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT OR IGNORE INTO messages (id, session_id, role, content, timestamp, usage, permission_mode)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
       message.id,
       message.sessionId,
       message.role,
       JSON.stringify(message.content),
       message.timestamp,
-      message.usage ? JSON.stringify(message.usage) : null
+      message.usage ? JSON.stringify(message.usage) : null,
+      message.permissionMode ?? null
     )
   },
 
@@ -238,6 +245,7 @@ export const messageDb = {
         role: row.role as ClaudeMessage['role'],
         content,
         timestamp: row.timestamp as string,
+        permissionMode: (row.permission_mode as string) || undefined,
         usage
       }
     })
