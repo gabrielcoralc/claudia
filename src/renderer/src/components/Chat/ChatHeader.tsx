@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Edit2, Check, X, Terminal } from 'lucide-react'
+import { Edit2, Check, X } from 'lucide-react'
 import { useSessionStore } from '../../stores/sessionStore'
 import type { Session } from '../../../../shared/types'
 
@@ -8,7 +8,7 @@ interface Props {
 }
 
 export default function ChatHeader({ session }: Props): React.JSX.Element {
-  const { updateSessionTitle, toggleTerminalVisible, terminalVisible } = useSessionStore()
+  const { updateSessionTitle } = useSessionStore()
   const [editing, setEditing] = useState(false)
   const [titleValue, setTitleValue] = useState(session.title ?? '')
 
@@ -65,17 +65,6 @@ export default function ChatHeader({ session }: Props): React.JSX.Element {
       </div>
 
       <div className="no-drag flex items-center gap-3 shrink-0">
-        <button
-          onClick={toggleTerminalVisible}
-          title={terminalVisible ? 'Hide terminal' : 'Show terminal'}
-          className={`p-1.5 rounded transition-colors ${
-            terminalVisible
-              ? 'text-claude-orange bg-claude-orange/10 hover:bg-claude-orange/20'
-              : 'text-claude-muted hover:text-claude-text hover:bg-claude-hover'
-          }`}
-        >
-          <Terminal size={14} />
-        </button>
         <div className="flex items-center gap-1.5">
           <div className={`w-1.5 h-1.5 rounded-full ${
             session.status === 'active' ? 'bg-green-400 animate-pulse' :

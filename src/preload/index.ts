@@ -10,6 +10,7 @@ const api = {
     getCostSummary: (id: string): Promise<SessionCostSummary | null> => ipcRenderer.invoke('sessions:getCostSummary', id),
     delete: (id: string): Promise<void> => ipcRenderer.invoke('sessions:delete', id),
     updateTitle: (id: string, title: string): Promise<void> => ipcRenderer.invoke('sessions:updateTitle', id, title),
+    updateStatus: (id: string, status: 'active' | 'completed' | 'paused'): Promise<void> => ipcRenderer.invoke('sessions:updateStatus', id, status),
     addTag: (id: string, tag: string): Promise<void> => ipcRenderer.invoke('sessions:addTag', id, tag),
     removeTag: (id: string, tag: string): Promise<void> => ipcRenderer.invoke('sessions:removeTag', id, tag),
     launchNew: (opts: {

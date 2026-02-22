@@ -9,8 +9,8 @@ interface SessionStore {
   settings: AppSettings | null
   isLoading: boolean
   sidebarView: 'sessions' | 'projects'
-  terminalSessionId: string | null
-  terminalVisible: boolean
+  activeTerminals: Set<string>
+  hiddenTerminals: Set<string>
 
   loadSessions: () => Promise<void>
   loadProjects: () => Promise<void>
@@ -28,8 +28,10 @@ interface SessionStore {
   openTerminalForSession: (sessionId: string, projectPath: string) => Promise<void>
   launchSessionTerminal: (launchId: string, projectPath: string) => Promise<void>
   resumeSession: (sessionId: string, projectPath: string, branch?: string) => Promise<void>
-  closeTerminal: () => Promise<void>
-  toggleTerminalVisible: () => void
+  closeTerminal: (sessionId: string) => Promise<void>
+  terminateTerminalSession: (sessionId: string) => Promise<void>
+  toggleTerminalVisible: (sessionId: string) => void
+  removeActiveTerminal: (sessionId: string) => void
   linkTerminal: (launchId: string, sessionId: string) => void
   replaceSession: (launchId: string, sessionId: string, session: Session) => void
 }
@@ -42,8 +44,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   settings: null,
   isLoading: false,
   sidebarView: 'sessions',
-  terminalSessionId: null,
-  terminalVisible: false,
+  activeTerminals: new Set<string>(),
+  hiddenTerminals: new Set<string>(),
 
   loadSessions: async () => {
     set({ isLoading: true })
@@ -135,11 +137,19 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   deleteSession: async (id) => {
     await window.api.sessions.delete(id)
-    set(state => ({
-      sessions: state.sessions.filter(s => s.id !== id),
-      selectedSessionId: state.selectedSessionId === id ? null : state.selectedSessionId,
-      messages: Object.fromEntries(Object.entries(state.messages).filter(([k]) => k !== id))
-    }))
+    set(state => {
+      const next = new Set(state.activeTerminals)
+      next.delete(id)
+      const nextHidden = new Set(state.hiddenTerminals)
+      nextHidden.delete(id)
+      return {
+        sessions: state.sessions.filter(s => s.id !== id),
+        selectedSessionId: state.selectedSessionId === id ? null : state.selectedSessionId,
+        messages: Object.fromEntries(Object.entries(state.messages).filter(([k]) => k !== id)),
+        activeTerminals: next,
+        hiddenTerminals: nextHidden
+      }
+    })
   },
 
   updateSessionTitle: async (id, title) => {
@@ -150,35 +160,46 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   openTerminalForSession: async (sessionId, projectPath) => {
-    const currentTerminal = get().terminalSessionId
-    // Close previous terminal if it belongs to a different session
-    if (currentTerminal && currentTerminal !== sessionId) {
-      await window.api.terminal.kill(currentTerminal)
+    // If this session already has an active terminal, just make it visible
+    if (get().activeTerminals.has(sessionId)) {
+      set(state => {
+        const nextHidden = new Set(state.hiddenTerminals)
+        nextHidden.delete(sessionId)
+        return { hiddenTerminals: nextHidden }
+      })
+      return
     }
 
     const result = await window.api.terminal.create(sessionId, projectPath)
     if (result.success) {
-      set({ terminalSessionId: sessionId, terminalVisible: true })
+      set(state => {
+        const next = new Set(state.activeTerminals)
+        next.add(sessionId)
+        const nextHidden = new Set(state.hiddenTerminals)
+        nextHidden.delete(sessionId)
+        return { activeTerminals: next, hiddenTerminals: nextHidden }
+      })
     }
   },
 
   launchSessionTerminal: async (launchId, projectPath) => {
     console.log(`[sessionStore] launchSessionTerminal id=${launchId} path=${projectPath}`)
-    const currentTerminal = get().terminalSessionId
-    if (currentTerminal && currentTerminal !== launchId) {
-      console.log(`[sessionStore] killing previous terminal id=${currentTerminal}`)
-      await window.api.terminal.kill(currentTerminal)
-    }
 
     const result = await window.api.terminal.create(launchId, projectPath)
     console.log(`[sessionStore] terminal.create result:`, result)
     if (result.success) {
-      set({ terminalSessionId: launchId, terminalVisible: true, selectedSessionId: launchId })
+      set(state => {
+        const next = new Set(state.activeTerminals)
+        next.add(launchId)
+        const nextHidden = new Set(state.hiddenTerminals)
+        nextHidden.delete(launchId)
+        return { activeTerminals: next, hiddenTerminals: nextHidden, selectedSessionId: launchId }
+      })
       setTimeout(() => {
-        const currentId = get().terminalSessionId
-        console.log(`[sessionStore] writing 'claude\\r' to terminal id=${currentId} (original launchId=${launchId})`)
-        if (currentId) {
-          window.api.terminal.write(currentId, 'claude\r')
+        const { activeTerminals } = get()
+        console.log(`[sessionStore] writing 'claude\\r' to terminal id=${launchId}`)
+        if (activeTerminals.has(launchId)) {
+          window.api.terminal.write(launchId, 'claude\r')
         }
       }, 600)
     } else {
@@ -187,14 +208,20 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   resumeSession: async (sessionId, projectPath, branch?) => {
-    const currentTerminal = get().terminalSessionId
-    if (currentTerminal && currentTerminal !== sessionId) {
-      await window.api.terminal.kill(currentTerminal)
+    // If this session already has an active terminal, kill it first to get a fresh one
+    if (get().activeTerminals.has(sessionId)) {
+      await window.api.terminal.kill(sessionId)
     }
 
     const result = await window.api.terminal.create(sessionId, projectPath)
     if (result.success) {
-      set({ terminalSessionId: sessionId, terminalVisible: true })
+      set(state => {
+        const next = new Set(state.activeTerminals)
+        next.add(sessionId)
+        const nextHidden = new Set(state.hiddenTerminals)
+        nextHidden.delete(sessionId)
+        return { activeTerminals: next, hiddenTerminals: nextHidden }
+      })
       setTimeout(() => {
         const resumeCmd = `claude --resume ${sessionId}`
         const cmd = branch ? `git checkout "${branch}" && ${resumeCmd}` : resumeCmd
@@ -203,23 +230,82 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  closeTerminal: async () => {
-    const sessionId = get().terminalSessionId
-    if (sessionId) {
-      await window.api.terminal.kill(sessionId)
-      set({ terminalSessionId: null, terminalVisible: false })
-    }
+  closeTerminal: async (sessionId: string) => {
+    await window.api.terminal.kill(sessionId)
+    set(state => {
+      const next = new Set(state.activeTerminals)
+      next.delete(sessionId)
+      const nextHidden = new Set(state.hiddenTerminals)
+      nextHidden.delete(sessionId)
+      return { activeTerminals: next, hiddenTerminals: nextHidden }
+    })
   },
 
-  toggleTerminalVisible: () => {
-    set(state => ({ terminalVisible: !state.terminalVisible }))
+  terminateTerminalSession: async (sessionId: string) => {
+    console.log(`[sessionStore] terminateTerminalSession id=${sessionId}`)
+    try {
+      await window.api.terminal.kill(sessionId)
+      console.log(`[sessionStore] terminal.kill OK id=${sessionId}`)
+    } catch (err) {
+      console.error(`[sessionStore] terminal.kill FAILED id=${sessionId}:`, err)
+    }
+    try {
+      await window.api.sessions.updateStatus(sessionId, 'completed')
+      console.log(`[sessionStore] sessions.updateStatus OK id=${sessionId}`)
+    } catch (err) {
+      console.error(`[sessionStore] sessions.updateStatus FAILED id=${sessionId}:`, err)
+    }
+    set(state => {
+      const next = new Set(state.activeTerminals)
+      next.delete(sessionId)
+      const nextHidden = new Set(state.hiddenTerminals)
+      nextHidden.delete(sessionId)
+      return {
+        activeTerminals: next,
+        hiddenTerminals: nextHidden,
+        sessions: state.sessions.map(s =>
+          s.id === sessionId ? { ...s, status: 'completed' as const, endedAt: new Date().toISOString() } : s
+        )
+      }
+    })
+    console.log(`[sessionStore] terminateTerminalSession DONE id=${sessionId}`)
+  },
+
+  toggleTerminalVisible: (sessionId: string) => {
+    set(state => {
+      const nextHidden = new Set(state.hiddenTerminals)
+      if (nextHidden.has(sessionId)) {
+        nextHidden.delete(sessionId)
+      } else {
+        nextHidden.add(sessionId)
+      }
+      return { hiddenTerminals: nextHidden }
+    })
+  },
+
+  removeActiveTerminal: (sessionId: string) => {
+    set(state => {
+      const next = new Set(state.activeTerminals)
+      next.delete(sessionId)
+      const nextHidden = new Set(state.hiddenTerminals)
+      nextHidden.delete(sessionId)
+      return { activeTerminals: next, hiddenTerminals: nextHidden }
+    })
   },
 
   linkTerminal: (launchId, sessionId) => {
-    const { terminalSessionId } = get()
-    if (terminalSessionId === launchId) {
-      set({ terminalSessionId: sessionId })
-    }
+    set(state => {
+      if (!state.activeTerminals.has(launchId)) return state
+      const next = new Set(state.activeTerminals)
+      next.delete(launchId)
+      next.add(sessionId)
+      const nextHidden = new Set(state.hiddenTerminals)
+      if (nextHidden.has(launchId)) {
+        nextHidden.delete(launchId)
+        nextHidden.add(sessionId)
+      }
+      return { activeTerminals: next, hiddenTerminals: nextHidden }
+    })
   },
 
   replaceSession: (launchId, sessionId, session) => {
@@ -227,10 +313,22 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const sessions = state.sessions.filter(s => s.id !== launchId)
       const alreadyExists = sessions.some(s => s.id === sessionId)
       const nextSessions = alreadyExists ? sessions : [session, ...sessions]
+      // Update activeTerminals if the launch had a terminal
+      const nextTerminals = new Set(state.activeTerminals)
+      if (nextTerminals.has(launchId)) {
+        nextTerminals.delete(launchId)
+        nextTerminals.add(sessionId)
+      }
+      const nextHidden = new Set(state.hiddenTerminals)
+      if (nextHidden.has(launchId)) {
+        nextHidden.delete(launchId)
+        nextHidden.add(sessionId)
+      }
       return {
         sessions: nextSessions,
         selectedSessionId: state.selectedSessionId === launchId ? sessionId : state.selectedSessionId,
-        terminalSessionId: state.terminalSessionId === launchId ? sessionId : state.terminalSessionId
+        activeTerminals: nextTerminals,
+        hiddenTerminals: nextHidden
       }
     })
   }

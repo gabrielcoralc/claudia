@@ -164,6 +164,7 @@ export interface IpcChannels {
   'sessions:getCostSummary': (id: string) => SessionCostSummary | null
   'sessions:delete': (id: string) => void
   'sessions:updateTitle': (id: string, title: string) => void
+  'sessions:updateStatus': (id: string, status: SessionStatus) => void
   'sessions:addTag': (id: string, tag: string) => void
   'sessions:removeTag': (id: string, tag: string) => void
 

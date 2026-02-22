@@ -2,6 +2,7 @@ import { ipcMain, BrowserWindow, dialog } from 'electron'
 import { sessionDb, messageDb, projectDb, settingsDb, reviewDb } from '../services/Database'
 import { areHooksInstalled, installHooks, uninstallHooks } from '../setup/claudeHooks'
 import { isHooksServerRunning } from '../services/HooksServer'
+import type { Session } from '../../shared/types'
 import {
   createTerminal, writeTerminal, resizeTerminal, killTerminal, killAllTerminals, isTerminalRunning,
   getUnstagedDiff, getFileDiff, revertFile, stageFile, stashChanges, getBranches, findGitRepos
@@ -64,6 +65,21 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   ipcMain.handle('sessions:updateTitle', (_e, id: string, title: string) =>
     sessionDb.updateTitle(id, title)
   )
+
+  ipcMain.handle('sessions:updateStatus', (_e, id: string, status: string) => {
+    console.log(`[IPC] sessions:updateStatus id=${id} status=${status}`)
+    const endedAt = status === 'completed' ? new Date().toISOString() : undefined
+    sessionDb.updateStatus(id, status as Session['status'], endedAt)
+    
+    // Emit event so frontend updates the session status
+    const updatedSession = sessionDb.getById(id)
+    if (updatedSession) {
+      console.log(`[IPC] sessions:updateStatus — emitting event:sessionUpdated for id=${id}`)
+      win.webContents.send('event:sessionUpdated', updatedSession)
+    } else {
+      console.warn(`[IPC] sessions:updateStatus — session not found after update id=${id}`)
+    }
+  })
 
   ipcMain.handle('sessions:addTag', (_e, id: string, tag: string) => {
     const session = sessionDb.getById(id)

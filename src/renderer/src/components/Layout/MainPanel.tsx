@@ -9,39 +9,77 @@ import TerminalPane from '../Terminal/TerminalPane'
 import SessionControls from '../Terminal/SessionControls'
 import ChatHeader from '../Chat/ChatHeader'
 import NewSessionDialog from './NewSessionDialog'
-import { Code2, ScrollText, Info, Zap, Plus } from 'lucide-react'
+import { Code2, ScrollText, Info, Zap, Plus, ChevronRight, ChevronDown, Square } from 'lucide-react'
 import type { Session } from '../../../../shared/types'
 
 function GlobalTerminalPanel(): React.JSX.Element | null {
-  const { terminalSessionId, terminalVisible, closeTerminal } = useSessionStore()
+  const { activeTerminals, hiddenTerminals, selectedSessionId, toggleTerminalVisible, terminateTerminalSession } = useSessionStore()
 
-  if (!terminalVisible) return null
+  // No terminals at all — nothing to render
+  if (activeTerminals.size === 0) return null
+
+  // Check if the selected session has a visible terminal
+  const selectedHasTerminal = !!(selectedSessionId && activeTerminals.has(selectedSessionId))
+  const isVisible = selectedHasTerminal && !hiddenTerminals.has(selectedSessionId!)
 
   return (
-    <div className="w-[45%] min-w-[320px] border-l border-claude-border flex flex-col">
-      <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-claude-panel border-b border-claude-border shrink-0">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-mono text-claude-muted">{'>'}_</span>
-          <span className="text-xs text-claude-text font-medium">Terminal</span>
-          {terminalSessionId && (
+    <>
+      {/* Terminal panel container — visible only when selected session has visible terminal */}
+      <div className={`w-[45%] min-w-[320px] border-l border-claude-border flex flex-col ${
+        isVisible ? '' : 'hidden'
+      }`}>
+        <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-claude-panel border-b border-claude-border shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono text-claude-muted">{'>'}_</span>
+            <span className="text-xs text-claude-text font-medium">Terminal</span>
             <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" title="Connected" />
-          )}
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => selectedSessionId && toggleTerminalVisible(selectedSessionId)}
+              className="text-claude-muted hover:text-claude-text p-1 rounded hover:bg-claude-hover transition-colors"
+              title="Hide terminal"
+            >
+              <ChevronRight size={14} />
+            </button>
+            <button
+              onClick={() => selectedSessionId && terminateTerminalSession(selectedSessionId)}
+              className="text-claude-muted hover:text-red-400 p-1 rounded hover:bg-claude-hover transition-colors"
+              title="Terminate terminal session"
+            >
+              <Square size={14} />
+            </button>
+          </div>
         </div>
-        <button
-          onClick={closeTerminal}
-          className="text-claude-muted hover:text-claude-text text-xs px-2 py-0.5 rounded hover:bg-claude-hover transition-colors"
-          title="Close terminal"
-        >
-          ✕
-        </button>
+        <div className="flex-1 overflow-hidden relative">
+          {/* Render ALL active terminals — show only the selected one, hide the rest with CSS */}
+          {Array.from(activeTerminals).map(termId => (
+            <div
+              key={termId}
+              className={`absolute inset-0 ${termId === selectedSessionId ? '' : 'invisible pointer-events-none'}`}
+            >
+              <TerminalPane sessionId={termId} />
+            </div>
+          ))}
+        </div>
       </div>
-      <div className="flex-1 overflow-hidden">
-        {terminalSessionId
-          ? <TerminalPane sessionId={terminalSessionId} />
-          : <div className="flex items-center justify-center h-full text-claude-muted text-xs">No terminal session</div>
-        }
-      </div>
-    </div>
+
+      {/* Floating button when selected session has terminal but it's hidden */}
+      {selectedHasTerminal && !isVisible && (
+        <div className="fixed right-4 bottom-4 z-50">
+          <button
+            onClick={() => selectedSessionId && toggleTerminalVisible(selectedSessionId)}
+            className="flex items-center gap-2 px-3 py-2 bg-claude-panel border border-claude-border rounded-lg shadow-lg hover:bg-claude-hover transition-colors text-claude-text"
+            title="Show terminal"
+          >
+            <span className="text-xs font-mono text-claude-muted">{'>'}_</span>
+            <span className="text-xs font-medium">Terminal</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+            <ChevronDown size={14} className="text-claude-muted" />
+          </button>
+        </div>
+      )}
+    </>
   )
 }
 
@@ -65,7 +103,7 @@ function SessionView({ session }: { session: Session }): React.JSX.Element {
   const isActive = session.status === 'active'
   const [activeTab, setActiveTab] = useState<TabId>('logs')
   const [showNewSession, setShowNewSession] = useState(false)
-  const { terminalVisible, resumeSession } = useSessionStore()
+  const { resumeSession } = useSessionStore()
 
   const currentTab = isActive ? activeTab : (activeTab === 'code' ? 'logs' : activeTab)
 
@@ -140,9 +178,15 @@ function SessionView({ session }: { session: Session }): React.JSX.Element {
 }
 
 export default function MainPanel(): React.JSX.Element {
-  const { selectedSessionId, sessions, terminalVisible } = useSessionStore()
+  const { selectedSessionId, sessions, activeTerminals, hiddenTerminals } = useSessionStore()
   const [showNewSession, setShowNewSession] = useState(false)
   const session = sessions.find(s => s.id === selectedSessionId)
+
+  const isTerminalVisible = !!(
+    selectedSessionId &&
+    activeTerminals.has(selectedSessionId) &&
+    !hiddenTerminals.has(selectedSessionId)
+  )
 
   const content = !selectedSessionId || !session
     ? (
@@ -157,7 +201,7 @@ export default function MainPanel(): React.JSX.Element {
 
   return (
     <div className="flex-1 flex flex-row overflow-hidden">
-      <div className={`flex flex-col overflow-hidden ${terminalVisible ? 'w-[55%]' : 'flex-1'}`}>
+      <div className={`flex flex-col overflow-hidden ${isTerminalVisible ? 'w-[55%]' : 'flex-1'}`}>
         {content}
       </div>
       <GlobalTerminalPanel />

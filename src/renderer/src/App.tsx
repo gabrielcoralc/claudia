@@ -14,6 +14,7 @@ export default function App(): React.JSX.Element {
     addMessage,
     selectSession,
     linkTerminal,
+    removeActiveTerminal,
     replaceSession,
     invalidateMessages
   } = useSessionStore()
@@ -57,6 +58,11 @@ export default function App(): React.JSX.Element {
       linkTerminal(launchId, sessionId)
     })
 
+    const offTerminalExit = window.api.on('event:terminal:exit', (payload: unknown) => {
+      const { sessionId } = payload as { sessionId: string }
+      removeActiveTerminal(sessionId)
+    })
+
     const offMessageAdded = window.api.on(
       'event:messageAdded',
       (data: unknown) => {
@@ -75,6 +81,7 @@ export default function App(): React.JSX.Element {
       offSessionStarted()
       offSessionReplaced()
       offTerminalLinked()
+      offTerminalExit()
       offMessageAdded()
     }
   }, [])

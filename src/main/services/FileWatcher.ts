@@ -165,7 +165,8 @@ async function processNewTranscript(
   const projectName = deriveProjectName(resolvedProjectPath)
 
   // Check if session already exists (created by HooksServer from SessionStart hook)
-  const alreadyExists = !!sessionDb.getById(sessionId)
+  const existingSession = sessionDb.getById(sessionId)
+  const alreadyExists = !!existingSession
 
   // Check if this transcript was launched from the app (peek only — HooksServer will consume)
   const pending = peekPendingLaunch(resolvedProjectPath) || peekPendingLaunch(projectPath)
@@ -190,7 +191,7 @@ async function processNewTranscript(
     transcriptPath,
     startedAt: stat ? stat.birthtime.toISOString() : new Date().toISOString(),
     model: 'claude-opus-4-5',
-    status: alreadyExists ? 'active' : 'completed',
+    status: existingSession ? existingSession.status : 'completed',
     totalCostUsd: costSummary.totalCostUsd,
     totalInputTokens: costSummary.totalInputTokens,
     totalOutputTokens: costSummary.totalOutputTokens,
