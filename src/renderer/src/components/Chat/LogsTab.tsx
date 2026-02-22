@@ -82,9 +82,12 @@ export default function LogsTab({ session }: Props): React.JSX.Element {
   }, [session.id])
 
   useEffect(() => {
-    if (autoScroll) {
+    if (!autoScroll) return
+    // Debounce scroll to avoid repeated animations when many messages arrive at once
+    const timer = setTimeout(() => {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }
+    }, 150)
+    return () => clearTimeout(timer)
   }, [sessionMessages.length, autoScroll])
 
   const handleScroll = () => {

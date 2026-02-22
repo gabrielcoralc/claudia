@@ -118,12 +118,19 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   addMessage: (sessionId, message) => {
-    set(state => ({
-      messages: {
-        ...state.messages,
-        [sessionId]: [...(state.messages[sessionId] ?? []), message]
+    set(state => {
+      const existing = state.messages[sessionId] ?? []
+      // Deduplicate: skip if a message with the same id already exists
+      if (message.id && existing.some(m => m.id === message.id)) {
+        return state
       }
-    }))
+      return {
+        messages: {
+          ...state.messages,
+          [sessionId]: [...existing, message]
+        }
+      }
+    })
   },
 
   invalidateMessages: (sessionId) => {

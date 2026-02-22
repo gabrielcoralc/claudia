@@ -287,6 +287,38 @@ describe('parseTranscriptFile', () => {
     expect(costSummary.totalInputTokens).toBe(350)
     expect(costSummary.totalOutputTokens).toBe(90)
   })
+
+  it('extracts gitBranch from the first entry that has it', async () => {
+    tmpFile = makeTempJSONL([SNAPSHOT_ENTRY, PROGRESS_ENTRY])
+    const { gitBranch } = await parseTranscriptFile(tmpFile)
+    expect(gitBranch).toBe('main')
+  })
+
+  it('returns undefined gitBranch when no entry has it', async () => {
+    const progressWithoutBranch = {
+      ...PROGRESS_ENTRY,
+      gitBranch: undefined
+    }
+    tmpFile = makeTempJSONL([SNAPSHOT_ENTRY, progressWithoutBranch])
+    const { gitBranch } = await parseTranscriptFile(tmpFile)
+    expect(gitBranch).toBeUndefined()
+  })
+
+  it('extracts gitBranch from later entries if first entries lack it', async () => {
+    const progressWithoutBranch = {
+      type: 'progress',
+      data: {},
+      timestamp: '2026-02-20T21:14:00.000Z',
+      uuid: 'progress-uuid-000'
+    }
+    const userWithBranch = {
+      ...makeUserMessage('user-uuid-001', 'Hello'),
+      gitBranch: 'feature/new-feature'
+    }
+    tmpFile = makeTempJSONL([progressWithoutBranch, userWithBranch])
+    const { gitBranch } = await parseTranscriptFile(tmpFile)
+    expect(gitBranch).toBe('feature/new-feature')
+  })
 })
 
 // ── deriveProjectName ─────────────────────────────────────────────────────────
@@ -337,17 +369,17 @@ describe('deriveSessionTitle', () => {
     expect(deriveSessionTitle([msg])).toBe('Hello!')
   })
 
-  it('returns "New Session" when there are no messages', () => {
-    expect(deriveSessionTitle([])).toBe('New Session')
+  it('returns null when there are no messages', () => {
+    expect(deriveSessionTitle([])).toBeNull()
   })
 
-  it('returns "New Session" when first message has no text blocks', () => {
+  it('returns null when first message has no text blocks', () => {
     const msg = {
       id: '1', sessionId: 's', role: 'user' as const,
       content: [{ type: 'tool_result' as const, tool_use_id: 'x', content: 'y' }],
       timestamp: '2026-01-01T00:00:00Z'
     }
-    expect(deriveSessionTitle([msg])).toBe('New Session')
+    expect(deriveSessionTitle([msg])).toBeNull()
   })
 })
 

@@ -237,11 +237,36 @@ export async function refreshSession(
   win: BrowserWindow
 ): Promise<void> {
   const entry = Array.from(watchedFiles.values()).find(w => w.sessionId === sessionId)
-  if (!entry) {
-    await forceProcessSession(sessionId, win)
+  if (entry) {
+    await onFileChanged(entry.transcriptPath, win)
     return
   }
-  await onFileChanged(entry.transcriptPath, win)
+
+  // Session not in watchedFiles — find its transcript and register it
+  // with the current DB message count so onFileChanged only sends NEW messages.
+  const found = await scanClaudeProjects()
+  const target = found.find(f => f.sessionId === sessionId)
+  if (!target) return
+
+  const existingSession = sessionDb.getById(sessionId)
+  const existingMsgCount = existingSession?.messageCount ?? 0
+
+  const stat = fs.existsSync(target.transcriptPath) ? fs.statSync(target.transcriptPath) : null
+
+  // Prefer cwd from JSONL; fall back to encoded path
+  const firstEntry = await readFirstEntry(target.transcriptPath)
+  const projectPath = firstEntry?.cwd || target.projectPath
+
+  watchedFiles.set(target.transcriptPath, {
+    sessionId,
+    projectPath,
+    transcriptPath: target.transcriptPath,
+    lastSize: stat ? stat.size : 0,
+    lastLineCount: existingMsgCount
+  })
+
+  // Now call onFileChanged which will only send messages after lastLineCount
+  await onFileChanged(target.transcriptPath, win)
 }
 
 export async function forceProcessSession(
