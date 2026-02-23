@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react'
 import { useSessionStore } from '../../stores/sessionStore'
 import WelcomeScreen from './WelcomeScreen'
-import LogsTab from '../Chat/LogsTab'
+import ChatTab from '../Chat/ChatTab'
 import SessionInfoTab from '../SessionInfo/SessionInfoTab'
 import ConsumptionTab from '../Consumption/ConsumptionTab'
 import CodeTab from '../Code/CodeTab'
@@ -94,7 +94,7 @@ interface TabDef {
 
 const TABS: TabDef[] = [
   { id: 'code',        label: 'Code',         icon: <Code2 size={13} />,       activeOnly: true },
-  { id: 'logs',        label: 'Logs',          icon: <ScrollText size={13} /> },
+  { id: 'logs',        label: 'Chat',          icon: <ScrollText size={13} /> },
   { id: 'session',     label: 'Session Info',  icon: <Info size={13} /> },
   { id: 'consumption', label: 'Consumption',   icon: <Zap size={13} /> },
 ]
@@ -164,7 +164,7 @@ function SessionView({ session }: { session: Session }): React.JSX.Element {
 
       {/* Tab content — fills available space; terminal panel is rendered at MainPanel level */}
       <div className="flex flex-col flex-1 overflow-hidden">
-        {currentTab === 'logs'        && <LogsTab session={session} />}
+        {currentTab === 'logs'        && <ChatTab session={session} />}
         {currentTab === 'session'     && <SessionInfoTab session={session} />}
         {currentTab === 'consumption' && <ConsumptionTab session={session} />}
         {currentTab === 'code'        && isActive && <CodeTab session={session} />}
