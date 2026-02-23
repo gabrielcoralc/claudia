@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { BrowserWindow } from 'electron'
 import type { ClaudeMessage, Session } from '../../shared/types'
-import { sessionDb, messageDb } from './Database'
+import { sessionDb, messageDb, dailyMetricsDb } from './Database'
 import { deriveProjectName } from './SessionParser'
 import {
   parseTranscriptFile,
@@ -17,9 +17,13 @@ import {
 interface WatchedFile {
   sessionId: string
   projectPath: string
+  projectName: string
   transcriptPath: string
   lastSize: number
   lastLineCount: number
+  lastCostUsd: number
+  lastInputTokens: number
+  lastOutputTokens: number
 }
 
 const watchedFiles = new Map<string, WatchedFile>()
@@ -97,9 +101,13 @@ async function importExistingSessions(win: BrowserWindow): Promise<void> {
       watchedFiles.set(transcriptPath, {
         sessionId,
         projectPath,
+        projectName: existing.projectName,
         transcriptPath,
         lastSize: fs.existsSync(transcriptPath) ? fs.statSync(transcriptPath).size : 0,
-        lastLineCount: existingMsgs.length
+        lastLineCount: existingMsgs.length,
+        lastCostUsd: existing.totalCostUsd ?? 0,
+        lastInputTokens: existing.totalInputTokens ?? 0,
+        lastOutputTokens: existing.totalOutputTokens ?? 0
       })
       continue
     }
@@ -133,6 +141,13 @@ async function onFileChanged(filePath: string, win: BrowserWindow): Promise<void
     return
   }
 
+  // Verify session exists in DB before processing (prevents FOREIGN KEY errors for external sessions)
+  const sessionExists = sessionDb.getById(watched.sessionId)
+  if (!sessionExists) {
+    console.log(`[FileWatcher] Skipping file change for external session: ${watched.sessionId}`)
+    return
+  }
+
   const { messages, costSummary } = await parseTranscriptFile(filePath)
   const newMessages = messages.slice(watched.lastLineCount)
 
@@ -144,7 +159,28 @@ async function onFileChanged(filePath: string, win: BrowserWindow): Promise<void
   }
 
   if (costSummary.totalCostUsd !== undefined) {
+    // Calculate delta and store in daily metrics
+    const deltaCost = (costSummary.totalCostUsd ?? 0) - watched.lastCostUsd
+    const deltaInput = (costSummary.totalInputTokens ?? 0) - watched.lastInputTokens
+    const deltaOutput = (costSummary.totalOutputTokens ?? 0) - watched.lastOutputTokens
+    const deltaMessages = newMessages.length
+
+    if (deltaCost > 0 || deltaInput > 0 || deltaOutput > 0 || deltaMessages > 0) {
+      const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+      dailyMetricsDb.addDelta(watched.sessionId, today, watched.projectPath, watched.projectName, {
+        costUsd: deltaCost,
+        inputTokens: deltaInput,
+        outputTokens: deltaOutput,
+        messageCount: deltaMessages
+      })
+    }
+
     sessionDb.updateCost(watched.sessionId, costSummary)
+
+    // Update tracked totals for next delta
+    watched.lastCostUsd = costSummary.totalCostUsd ?? 0
+    watched.lastInputTokens = costSummary.totalInputTokens ?? 0
+    watched.lastOutputTokens = costSummary.totalOutputTokens ?? 0
   }
 
   watched.lastLineCount = messages.length
@@ -215,12 +251,27 @@ async function processNewTranscript(
     }
   }
 
+  // Insert initial cost as today's daily metrics
+  if (costSummary.totalCostUsd && costSummary.totalCostUsd > 0) {
+    const today = new Date().toISOString().slice(0, 10)
+    dailyMetricsDb.addDelta(sessionId, today, resolvedProjectPath, projectName, {
+      costUsd: costSummary.totalCostUsd ?? 0,
+      inputTokens: costSummary.totalInputTokens ?? 0,
+      outputTokens: costSummary.totalOutputTokens ?? 0,
+      messageCount: messages.length
+    })
+  }
+
   watchedFiles.set(transcriptPath, {
     sessionId,
-    projectPath,
+    projectPath: resolvedProjectPath,
+    projectName,
     transcriptPath,
     lastSize: stat ? stat.size : 0,
-    lastLineCount: messages.length
+    lastLineCount: messages.length,
+    lastCostUsd: costSummary.totalCostUsd ?? 0,
+    lastInputTokens: costSummary.totalInputTokens ?? 0,
+    lastOutputTokens: costSummary.totalOutputTokens ?? 0
   })
 
   // If session was already in the sidebar (created by HooksServer), update it; otherwise add it
@@ -236,6 +287,13 @@ export async function refreshSession(
   sessionId: string,
   win: BrowserWindow
 ): Promise<void> {
+  // Verify session exists in DB before processing (prevents FOREIGN KEY errors for external sessions)
+  const existingSession = sessionDb.getById(sessionId)
+  if (!existingSession) {
+    console.log(`[FileWatcher] refreshSession: session ${sessionId} not in DB (external session), skipping`)
+    return
+  }
+
   const entry = Array.from(watchedFiles.values()).find(w => w.sessionId === sessionId)
   if (entry) {
     await onFileChanged(entry.transcriptPath, win)
@@ -248,7 +306,6 @@ export async function refreshSession(
   const target = found.find(f => f.sessionId === sessionId)
   if (!target) return
 
-  const existingSession = sessionDb.getById(sessionId)
   const existingMsgCount = existingSession?.messageCount ?? 0
 
   const stat = fs.existsSync(target.transcriptPath) ? fs.statSync(target.transcriptPath) : null
@@ -260,9 +317,13 @@ export async function refreshSession(
   watchedFiles.set(target.transcriptPath, {
     sessionId,
     projectPath,
+    projectName: existingSession?.projectName ?? deriveProjectName(projectPath),
     transcriptPath: target.transcriptPath,
     lastSize: stat ? stat.size : 0,
-    lastLineCount: existingMsgCount
+    lastLineCount: existingMsgCount,
+    lastCostUsd: existingSession?.totalCostUsd ?? 0,
+    lastInputTokens: existingSession?.totalInputTokens ?? 0,
+    lastOutputTokens: existingSession?.totalOutputTokens ?? 0
   })
 
   // Now call onFileChanged which will only send messages after lastLineCount

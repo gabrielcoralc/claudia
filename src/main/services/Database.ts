@@ -2,7 +2,7 @@ import Database from 'better-sqlite3'
 import { app } from 'electron'
 import path from 'path'
 import fs from 'fs'
-import type { Session, ClaudeMessage, AppSettings, SessionCostSummary, Project } from '../../shared/types'
+import type { Session, ClaudeMessage, AppSettings, SessionCostSummary, Project, AnalyticsFilters, AnalyticsMetrics, SessionMetrics, ProjectMetrics, DailyMetrics, EntityDailyMetrics } from '../../shared/types'
 import { DEFAULT_SETTINGS } from '../../shared/types'
 
 let db: Database.Database
@@ -79,6 +79,22 @@ function initSchema(db: Database.Database): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_reviews_session ON reviews(session_id);
+
+    CREATE TABLE IF NOT EXISTS session_daily_metrics (
+      session_id TEXT NOT NULL,
+      date TEXT NOT NULL,
+      project_path TEXT NOT NULL,
+      project_name TEXT NOT NULL,
+      cost_usd REAL NOT NULL DEFAULT 0,
+      input_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      message_count INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (session_id, date),
+      FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_daily_metrics_date ON session_daily_metrics(date);
+    CREATE INDEX IF NOT EXISTS idx_daily_metrics_project ON session_daily_metrics(project_path);
   `)
 
   try {
@@ -349,6 +365,268 @@ export const reviewDb = {
   deleteBySession(sessionId: string): void {
     getDb().prepare('DELETE FROM reviews WHERE session_id = ?').run(sessionId)
   }
+}
+
+export const dailyMetricsDb = {
+  addDelta(
+    sessionId: string,
+    date: string,
+    projectPath: string,
+    projectName: string,
+    delta: { costUsd: number; inputTokens: number; outputTokens: number; messageCount: number }
+  ): void {
+    const db = getDb()
+    db.prepare(`
+      INSERT INTO session_daily_metrics (session_id, date, project_path, project_name, cost_usd, input_tokens, output_tokens, message_count)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(session_id, date) DO UPDATE SET
+        cost_usd = cost_usd + excluded.cost_usd,
+        input_tokens = input_tokens + excluded.input_tokens,
+        output_tokens = output_tokens + excluded.output_tokens,
+        message_count = message_count + excluded.message_count
+    `).run(sessionId, date, projectPath, projectName, delta.costUsd, delta.inputTokens, delta.outputTokens, delta.messageCount)
+  }
+}
+
+export const analyticsDb = {
+  getGlobalMetrics(filters: AnalyticsFilters): AnalyticsMetrics {
+    const db = getDb()
+    const { whereClause, params } = buildWhereClause(filters)
+    
+    const row = db.prepare(`
+      SELECT 
+        COUNT(*) as totalSessions,
+        COALESCE(SUM(total_cost_usd), 0) as totalCost,
+        COALESCE(SUM(total_input_tokens), 0) as totalInputTokens,
+        COALESCE(SUM(total_output_tokens), 0) as totalOutputTokens,
+        COALESCE(AVG(total_cost_usd), 0) as avgCostPerSession,
+        MIN(started_at) as minDate,
+        MAX(started_at) as maxDate
+      FROM sessions
+      ${whereClause}
+    `).get(...params) as Record<string, unknown>
+
+    const totalTokens = (row.totalInputTokens as number) + (row.totalOutputTokens as number)
+    
+    return {
+      totalSessions: row.totalSessions as number,
+      totalCost: row.totalCost as number,
+      totalInputTokens: row.totalInputTokens as number,
+      totalOutputTokens: row.totalOutputTokens as number,
+      totalTokens,
+      avgCostPerSession: row.avgCostPerSession as number,
+      dateRange: {
+        start: (row.minDate as string) || '',
+        end: (row.maxDate as string) || ''
+      }
+    }
+  },
+
+  getTopSessions(limit: number, filters: AnalyticsFilters): SessionMetrics[] {
+    const db = getDb()
+    const { whereClause, params } = buildWhereClause(filters)
+    
+    const rows = db.prepare(`
+      SELECT 
+        id as sessionId,
+        title as sessionTitle,
+        project_name as projectName,
+        COALESCE(total_cost_usd, 0) as cost,
+        COALESCE(total_input_tokens, 0) as inputTokens,
+        COALESCE(total_output_tokens, 0) as outputTokens,
+        started_at as startedAt,
+        model
+      FROM sessions
+      ${whereClause}
+      ORDER BY total_cost_usd DESC
+      LIMIT ?
+    `).all(...params, limit) as Record<string, unknown>[]
+
+    return rows.map(row => ({
+      sessionId: row.sessionId as string,
+      sessionTitle: (row.sessionTitle as string | null) ?? undefined,
+      projectName: row.projectName as string,
+      cost: row.cost as number,
+      inputTokens: row.inputTokens as number,
+      outputTokens: row.outputTokens as number,
+      totalTokens: (row.inputTokens as number) + (row.outputTokens as number),
+      startedAt: row.startedAt as string,
+      model: row.model as string
+    }))
+  },
+
+  getProjectMetrics(filters: AnalyticsFilters): ProjectMetrics[] {
+    const db = getDb()
+    const { whereClause, params } = buildWhereClause(filters)
+    
+    const rows = db.prepare(`
+      SELECT 
+        project_name as projectName,
+        project_path as projectPath,
+        COUNT(*) as sessionCount,
+        COALESCE(SUM(total_cost_usd), 0) as totalCost,
+        COALESCE(SUM(total_input_tokens), 0) as totalInputTokens,
+        COALESCE(SUM(total_output_tokens), 0) as totalOutputTokens
+      FROM sessions
+      ${whereClause}
+      GROUP BY project_path
+      ORDER BY totalCost DESC
+    `).all(...params) as Record<string, unknown>[]
+
+    return rows.map(row => ({
+      projectName: row.projectName as string,
+      projectPath: row.projectPath as string,
+      sessionCount: row.sessionCount as number,
+      totalCost: row.totalCost as number,
+      totalInputTokens: row.totalInputTokens as number,
+      totalOutputTokens: row.totalOutputTokens as number,
+      totalTokens: (row.totalInputTokens as number) + (row.totalOutputTokens as number)
+    }))
+  },
+
+  getSessionDailyBreakdown(filters: AnalyticsFilters): EntityDailyMetrics[] {
+    const db = getDb()
+    const { whereClause, params } = buildDailyWhereClause(filters)
+
+    const rows = db.prepare(`
+      SELECT 
+        dm.session_id as entityId,
+        COALESCE(s.title, substr(dm.session_id, 1, 8)) as entityName,
+        dm.date,
+        COALESCE(SUM(dm.cost_usd), 0) as cost,
+        COALESCE(SUM(dm.input_tokens), 0) as inputTokens,
+        COALESCE(SUM(dm.output_tokens), 0) as outputTokens
+      FROM session_daily_metrics dm
+      JOIN sessions s ON s.id = dm.session_id
+      ${whereClause}
+      GROUP BY dm.session_id, dm.date
+      ORDER BY dm.date ASC
+    `).all(...params) as Record<string, unknown>[]
+
+    return rows.map(row => ({
+      entityId: row.entityId as string,
+      entityName: row.entityName as string,
+      date: row.date as string,
+      cost: row.cost as number,
+      inputTokens: row.inputTokens as number,
+      outputTokens: row.outputTokens as number
+    }))
+  },
+
+  getProjectDailyBreakdown(filters: AnalyticsFilters): EntityDailyMetrics[] {
+    const db = getDb()
+    const { whereClause, params } = buildDailyWhereClause(filters)
+
+    const rows = db.prepare(`
+      SELECT 
+        dm.project_path as entityId,
+        dm.project_name as entityName,
+        dm.date,
+        COALESCE(SUM(dm.cost_usd), 0) as cost,
+        COALESCE(SUM(dm.input_tokens), 0) as inputTokens,
+        COALESCE(SUM(dm.output_tokens), 0) as outputTokens
+      FROM session_daily_metrics dm
+      JOIN sessions s ON s.id = dm.session_id
+      ${whereClause}
+      GROUP BY dm.project_path, dm.date
+      ORDER BY dm.date ASC
+    `).all(...params) as Record<string, unknown>[]
+
+    return rows.map(row => ({
+      entityId: row.entityId as string,
+      entityName: row.entityName as string,
+      date: row.date as string,
+      cost: row.cost as number,
+      inputTokens: row.inputTokens as number,
+      outputTokens: row.outputTokens as number
+    }))
+  },
+
+  getDailyMetrics(filters: AnalyticsFilters): DailyMetrics[] {
+    const db = getDb()
+    const { whereClause, params } = buildDailyWhereClause(filters)
+    
+    const rows = db.prepare(`
+      SELECT 
+        dm.date,
+        COUNT(DISTINCT dm.session_id) as sessions,
+        COALESCE(SUM(dm.cost_usd), 0) as cost,
+        COALESCE(SUM(dm.input_tokens), 0) as inputTokens,
+        COALESCE(SUM(dm.output_tokens), 0) as outputTokens
+      FROM session_daily_metrics dm
+      JOIN sessions s ON s.id = dm.session_id
+      ${whereClause}
+      GROUP BY dm.date
+      ORDER BY dm.date ASC
+    `).all(...params) as Record<string, unknown>[]
+
+    return rows.map(row => ({
+      date: row.date as string,
+      sessions: row.sessions as number,
+      cost: row.cost as number,
+      inputTokens: row.inputTokens as number,
+      outputTokens: row.outputTokens as number,
+      totalTokens: (row.inputTokens as number) + (row.outputTokens as number)
+    }))
+  }
+}
+
+function buildWhereClause(filters: AnalyticsFilters): { whereClause: string; params: unknown[] } {
+  const conditions: string[] = ["source = 'app'"]
+  const params: unknown[] = []
+
+  if (filters.startDate) {
+    conditions.push('started_at >= ?')
+    params.push(filters.startDate)
+  }
+
+  if (filters.endDate) {
+    conditions.push('started_at <= ?')
+    params.push(filters.endDate + ' 23:59:59')
+  }
+
+  if (filters.projectPaths && filters.projectPaths.length > 0) {
+    const placeholders = filters.projectPaths.map(() => '?').join(', ')
+    conditions.push(`project_path IN (${placeholders})`)
+    params.push(...filters.projectPaths)
+  }
+
+  if (filters.sessionSearch && filters.sessionSearch.trim()) {
+    conditions.push('title LIKE ?')
+    params.push(`%${filters.sessionSearch}%`)
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+  return { whereClause, params }
+}
+
+function buildDailyWhereClause(filters: AnalyticsFilters): { whereClause: string; params: unknown[] } {
+  const conditions: string[] = ["s.source = 'app'"]
+  const params: unknown[] = []
+
+  if (filters.startDate) {
+    conditions.push('dm.date >= ?')
+    params.push(filters.startDate)
+  }
+
+  if (filters.endDate) {
+    conditions.push('dm.date <= ?')
+    params.push(filters.endDate)
+  }
+
+  if (filters.projectPaths && filters.projectPaths.length > 0) {
+    const placeholders = filters.projectPaths.map(() => '?').join(', ')
+    conditions.push(`dm.project_path IN (${placeholders})`)
+    params.push(...filters.projectPaths)
+  }
+
+  if (filters.sessionSearch && filters.sessionSearch.trim()) {
+    conditions.push('s.title LIKE ?')
+    params.push(`%${filters.sessionSearch}%`)
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+  return { whereClause, params }
 }
 
 export function closeDb(): void {

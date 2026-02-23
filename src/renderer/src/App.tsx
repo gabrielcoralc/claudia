@@ -17,7 +17,8 @@ export default function App(): React.JSX.Element {
     removeActiveTerminal,
     replaceSession,
     invalidateMessages,
-    setSessionActivity
+    setSessionActivity,
+    viewMode
   } = useSessionStore()
 
   useEffect(() => {
@@ -107,7 +108,7 @@ export default function App(): React.JSX.Element {
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-claude-dark">
-      <Sidebar />
+      {viewMode === 'sessions' && <Sidebar />}
       <MainPanel />
     </div>
   )

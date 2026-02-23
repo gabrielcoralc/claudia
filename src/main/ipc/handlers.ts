@@ -1,8 +1,8 @@
 import { ipcMain, BrowserWindow, dialog } from 'electron'
-import { sessionDb, messageDb, projectDb, settingsDb, reviewDb } from '../services/Database'
+import { sessionDb, messageDb, projectDb, settingsDb, reviewDb, analyticsDb } from '../services/Database'
 import { areHooksInstalled, installHooks, uninstallHooks } from '../setup/claudeHooks'
 import { isHooksServerRunning } from '../services/HooksServer'
-import type { Session } from '../../shared/types'
+import type { Session, AnalyticsFilters } from '../../shared/types'
 import {
   createTerminal, writeTerminal, resizeTerminal, killTerminal, killAllTerminals, isTerminalRunning,
   getUnstagedDiff, getFileDiff, revertFile, stageFile, stashChanges, getBranches, findGitRepos
@@ -111,6 +111,25 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     installed: areHooksInstalled(),
     serverRunning: isHooksServerRunning()
   }))
+
+  // Analytics
+  ipcMain.handle('analytics:getGlobalMetrics', (_e, filters: AnalyticsFilters) => 
+    analyticsDb.getGlobalMetrics(filters))
+
+  ipcMain.handle('analytics:getTopSessions', (_e, limit: number, filters: AnalyticsFilters) => 
+    analyticsDb.getTopSessions(limit, filters))
+
+  ipcMain.handle('analytics:getProjectMetrics', (_e, filters: AnalyticsFilters) => 
+    analyticsDb.getProjectMetrics(filters))
+
+  ipcMain.handle('analytics:getDailyMetrics', (_e, filters: AnalyticsFilters) => 
+    analyticsDb.getDailyMetrics(filters))
+
+  ipcMain.handle('analytics:getSessionDailyBreakdown', (_e, filters: AnalyticsFilters) => 
+    analyticsDb.getSessionDailyBreakdown(filters))
+
+  ipcMain.handle('analytics:getProjectDailyBreakdown', (_e, filters: AnalyticsFilters) => 
+    analyticsDb.getProjectDailyBreakdown(filters))
 
   ipcMain.handle('claude:launch', async (_e, opts: {
     cwd: string

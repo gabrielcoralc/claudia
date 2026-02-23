@@ -15,6 +15,7 @@ interface SessionStore {
   settings: AppSettings | null
   isLoading: boolean
   sidebarView: 'sessions' | 'projects'
+  viewMode: 'sessions' | 'analytics'
   activeTerminals: Set<string>
   hiddenTerminals: Set<string>
   sessionActivity: Record<string, SessionActivity>
@@ -30,6 +31,7 @@ interface SessionStore {
   invalidateMessages: (sessionId: string) => void
   updateSettings: (partial: Partial<AppSettings>) => Promise<void>
   setSidebarView: (view: 'sessions' | 'projects') => void
+  setViewMode: (mode: 'sessions' | 'analytics') => void
   deleteSession: (id: string) => Promise<void>
   updateSessionTitle: (id: string, title: string) => Promise<void>
   openTerminalForSession: (sessionId: string, projectPath: string) => Promise<void>
@@ -52,6 +54,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   settings: null,
   isLoading: false,
   sidebarView: 'sessions',
+  viewMode: 'sessions',
   activeTerminals: new Set<string>(),
   hiddenTerminals: new Set<string>(),
   sessionActivity: {},
@@ -150,6 +153,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   setSidebarView: (view) => set({ sidebarView: view }),
+
+  setViewMode: (mode) => set({ viewMode: mode }),
 
   deleteSession: async (id) => {
     await window.api.sessions.delete(id)

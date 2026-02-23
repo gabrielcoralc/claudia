@@ -24,6 +24,7 @@
     "chokidar": "^3.6.0",
     "electron-updater": "^6.1.7",
     "node-pty": "^1.0.0",
+    "recharts": "^3.7.0",
     "which": "^4.0.0"
   },
   "devDependencies": {

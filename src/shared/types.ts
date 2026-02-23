@@ -133,6 +133,64 @@ export interface SessionCostSummary {
   durationMs: number
 }
 
+// Analytics interfaces
+export interface AnalyticsFilters {
+  startDate?: string // YYYY-MM-DD
+  endDate?: string   // YYYY-MM-DD
+  projectPaths?: string[] // empty = all projects
+  sessionSearch?: string  // search in session title
+}
+
+export interface AnalyticsMetrics {
+  totalSessions: number
+  totalCost: number
+  totalInputTokens: number
+  totalOutputTokens: number
+  totalTokens: number
+  avgCostPerSession: number
+  dateRange: { start: string; end: string }
+}
+
+export interface SessionMetrics {
+  sessionId: string
+  sessionTitle?: string
+  projectName: string
+  cost: number
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+  startedAt: string
+  model: string
+}
+
+export interface ProjectMetrics {
+  projectName: string
+  projectPath: string
+  sessionCount: number
+  totalCost: number
+  totalInputTokens: number
+  totalOutputTokens: number
+  totalTokens: number
+}
+
+export interface DailyMetrics {
+  date: string // YYYY-MM-DD
+  sessions: number
+  cost: number
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+}
+
+export interface EntityDailyMetrics {
+  entityId: string
+  entityName: string
+  date: string
+  cost: number
+  inputTokens: number
+  outputTokens: number
+}
+
 export interface AppSettings {
   defaultAllowedTools: string[]
   defaultPermissionMode: 'default' | 'plan' | 'acceptEdits' | 'bypassPermissions'
@@ -199,6 +257,14 @@ export interface IpcChannels {
     name: string
   }) => { success: boolean; launchId?: string; error?: string }
   'sessions:resetActive': () => void
+
+  // Analytics
+  'analytics:getGlobalMetrics': (filters: AnalyticsFilters) => AnalyticsMetrics
+  'analytics:getTopSessions': (limit: number, filters: AnalyticsFilters) => SessionMetrics[]
+  'analytics:getProjectMetrics': (filters: AnalyticsFilters) => ProjectMetrics[]
+  'analytics:getDailyMetrics': (filters: AnalyticsFilters) => DailyMetrics[]
+  'analytics:getSessionDailyBreakdown': (filters: AnalyticsFilters) => EntityDailyMetrics[]
+  'analytics:getProjectDailyBreakdown': (filters: AnalyticsFilters) => EntityDailyMetrics[]
 
   // Events (main -> renderer)
   'event:sessionStarted': Session

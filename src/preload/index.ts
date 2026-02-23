@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Session, ClaudeMessage, AppSettings, Project, SessionCostSummary } from '../shared/types'
+import type { Session, ClaudeMessage, AppSettings, Project, SessionCostSummary, AnalyticsFilters, AnalyticsMetrics, SessionMetrics, ProjectMetrics, DailyMetrics, EntityDailyMetrics } from '../shared/types'
 
 const api = {
   sessions: {
@@ -93,6 +93,21 @@ const api = {
   dialog: {
     openFolder: (defaultPath?: string): Promise<string | null> =>
       ipcRenderer.invoke('dialog:openFolder', defaultPath)
+  },
+
+  analytics: {
+    getGlobalMetrics: (filters: AnalyticsFilters): Promise<AnalyticsMetrics> =>
+      ipcRenderer.invoke('analytics:getGlobalMetrics', filters),
+    getTopSessions: (limit: number, filters: AnalyticsFilters): Promise<SessionMetrics[]> =>
+      ipcRenderer.invoke('analytics:getTopSessions', limit, filters),
+    getProjectMetrics: (filters: AnalyticsFilters): Promise<ProjectMetrics[]> =>
+      ipcRenderer.invoke('analytics:getProjectMetrics', filters),
+    getDailyMetrics: (filters: AnalyticsFilters): Promise<DailyMetrics[]> =>
+      ipcRenderer.invoke('analytics:getDailyMetrics', filters),
+    getSessionDailyBreakdown: (filters: AnalyticsFilters): Promise<EntityDailyMetrics[]> =>
+      ipcRenderer.invoke('analytics:getSessionDailyBreakdown', filters),
+    getProjectDailyBreakdown: (filters: AnalyticsFilters): Promise<EntityDailyMetrics[]> =>
+      ipcRenderer.invoke('analytics:getProjectDailyBreakdown', filters)
   },
 
   on: (channel: string, callback: (...args: unknown[]) => void) => {

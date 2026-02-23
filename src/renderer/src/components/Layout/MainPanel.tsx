@@ -9,6 +9,7 @@ import TerminalPane from '../Terminal/TerminalPane'
 import SessionControls from '../Terminal/SessionControls'
 import ChatHeader from '../Chat/ChatHeader'
 import NewSessionDialog from './NewSessionDialog'
+import AnalyticsPanel from '../Analytics/AnalyticsPanel'
 import { Code2, ScrollText, Info, Zap, Plus, ChevronRight, ChevronDown, Square } from 'lucide-react'
 import type { Session } from '../../../../shared/types'
 
@@ -178,7 +179,7 @@ function SessionView({ session }: { session: Session }): React.JSX.Element {
 }
 
 export default function MainPanel(): React.JSX.Element {
-  const { selectedSessionId, sessions, activeTerminals, hiddenTerminals } = useSessionStore()
+  const { selectedSessionId, sessions, activeTerminals, hiddenTerminals, viewMode, setViewMode } = useSessionStore()
   const [showNewSession, setShowNewSession] = useState(false)
   const session = sessions.find(s => s.id === selectedSessionId)
 
@@ -203,15 +204,45 @@ export default function MainPanel(): React.JSX.Element {
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Global App Header */}
       <div className="drag-region h-12 flex items-center justify-center border-b border-claude-border bg-claude-panel shrink-0">
-        <span className="text-sm font-semibold text-claude-text">Claudia</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-semibold text-claude-text">Claudia</span>
+          <div className="no-drag flex rounded-lg bg-claude-hover overflow-hidden">
+            <button
+              onClick={() => setViewMode('sessions')}
+              className={`px-3 py-1.5 text-xs transition-colors ${
+                viewMode === 'sessions'
+                  ? 'bg-claude-panel text-claude-text'
+                  : 'text-claude-muted hover:text-claude-text'
+              }`}
+            >
+              Sessions
+            </button>
+            <button
+              onClick={() => setViewMode('analytics')}
+              className={`px-3 py-1.5 text-xs transition-colors ${
+                viewMode === 'analytics'
+                  ? 'bg-claude-panel text-claude-text'
+                  : 'text-claude-muted hover:text-claude-text'
+              }`}
+            >
+              Analytics
+            </button>
+          </div>
+        </div>
       </div>
       
       {/* Main content area with terminal */}
       <div className="flex-1 flex flex-row overflow-hidden">
-        <div className={`flex flex-col overflow-hidden ${isTerminalVisible ? 'w-[55%]' : 'flex-1'}`}>
-          {content}
-        </div>
-        <GlobalTerminalPanel />
+        {viewMode === 'sessions' ? (
+          <>
+            <div className={`flex flex-col overflow-hidden ${isTerminalVisible ? 'w-[55%]' : 'flex-1'}`}>
+              {content}
+            </div>
+            <GlobalTerminalPanel />
+          </>
+        ) : (
+          <AnalyticsPanel />
+        )}
       </div>
     </div>
   )
