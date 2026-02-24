@@ -1,0 +1,2 @@
+5e1910744e2cf3981044c4c7d20aebcbab6780ffed803d8fa266442a141b7430  dist/Claudia-0.1.0-arm64.dmg
+95128cadb0a19592a7af2cc3f60c321b377417e11bd193c41622ef8cebc30e0f  dist/Claudia-0.1.0-arm64-mac.zip
