@@ -228,6 +228,7 @@ export interface IpcChannels {
   'sessions:updateStatus': (id: string, status: SessionStatus) => void
   'sessions:addTag': (id: string, tag: string) => void
   'sessions:removeTag': (id: string, tag: string) => void
+  'sessions:updateBranch': (id: string, projectPath: string) => { success: boolean; branch?: string; error?: string }
 
   // Projects
   'projects:list': () => Project[]

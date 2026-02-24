@@ -34,6 +34,7 @@ interface SessionStore {
   setViewMode: (mode: 'sessions' | 'analytics') => void
   deleteSession: (id: string) => Promise<void>
   updateSessionTitle: (id: string, title: string) => Promise<void>
+  updateSessionBranch: (id: string, projectPath: string) => Promise<{ success: boolean; branch?: string; error?: string }>
   openTerminalForSession: (sessionId: string, projectPath: string) => Promise<void>
   launchSessionTerminal: (launchId: string, projectPath: string) => Promise<void>
   resumeSession: (sessionId: string, projectPath: string, branch?: string) => Promise<void>
@@ -178,6 +179,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set(state => ({
       sessions: state.sessions.map(s => s.id === id ? { ...s, title } : s)
     }))
+  },
+
+  updateSessionBranch: async (id, projectPath) => {
+    const result = await window.api.sessions.updateBranch(id, projectPath)
+    if (result.success && result.branch) {
+      set(state => ({
+        sessions: state.sessions.map(s => s.id === id ? { ...s, branch: result.branch } : s)
+      }))
+    }
+    return result
   },
 
   openTerminalForSession: async (sessionId, projectPath) => {

@@ -13,6 +13,8 @@ const api = {
     updateStatus: (id: string, status: 'active' | 'completed' | 'paused'): Promise<void> => ipcRenderer.invoke('sessions:updateStatus', id, status),
     addTag: (id: string, tag: string): Promise<void> => ipcRenderer.invoke('sessions:addTag', id, tag),
     removeTag: (id: string, tag: string): Promise<void> => ipcRenderer.invoke('sessions:removeTag', id, tag),
+    updateBranch: (id: string, projectPath: string): Promise<{ success: boolean; branch?: string; error?: string }> =>
+      ipcRenderer.invoke('sessions:updateBranch', id, projectPath),
     launchNew: (opts: {
       projectPath: string
       branch: string

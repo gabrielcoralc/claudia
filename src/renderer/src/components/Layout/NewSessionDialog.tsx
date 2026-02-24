@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Search, GitBranch, Folder, X, Play, Loader, Tag } from 'lucide-react'
 import { useSessionStore } from '../../stores/sessionStore'
+import claudiaIcon from '../../assets/claudia-icon.png'
 
 interface Props {
   onClose: () => void
@@ -89,17 +90,32 @@ export default function NewSessionDialog({ onClose }: Props): React.JSX.Element 
       <div className="bg-claude-panel border border-claude-border rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[85vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-claude-border shrink-0">
-          <div>
-            <h2 className="text-sm font-semibold text-claude-text">New Session</h2>
-            {scanDir && (
-              <p className="text-xs text-claude-muted mt-0.5 font-mono truncate max-w-xs" title={scanDir}>
-                Scanning: {scanDir}
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-claude-dark to-gray-900 flex items-center justify-center shrink-0 border border-claude-orange/20">
+              <img src={claudiaIcon} alt="Claudia" className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-claude-text">Launch New Session</h2>
+              <p className="text-xs text-claude-muted mt-0.5">
+                Start Claude Code from Claudia
               </p>
-            )}
+            </div>
           </div>
           <button onClick={onClose} className="p-1 rounded hover:bg-claude-hover text-claude-muted hover:text-claude-text transition-colors">
             <X size={16} />
           </button>
+        </div>
+
+        {/* Info banner */}
+        <div className="px-4 py-3 bg-claude-orange/10 border-b border-claude-orange/20 shrink-0">
+          <p className="text-xs text-claude-text">
+            <span className="font-medium text-claude-orange">✨ Managed Sessions:</span> Sessions launched from Claudia are tracked automatically with full analytics and cost monitoring
+          </p>
+          {scanDir && (
+            <p className="text-xs text-claude-muted mt-1 font-mono truncate" title={scanDir}>
+              📁 Scanning: {scanDir}
+            </p>
+          )}
         </div>
 
         {/* Search */}
@@ -150,26 +166,34 @@ export default function NewSessionDialog({ onClose }: Props): React.JSX.Element 
         {/* Branch + name + launch */}
         {selected && (
           <div className="px-4 py-3 border-t border-claude-border space-y-3 shrink-0">
-            <div className="flex items-center gap-2">
-              <GitBranch size={13} className="text-claude-muted shrink-0" />
-              <select
-                value={branch}
-                onChange={e => setBranch(e.target.value)}
-                className="flex-1 bg-claude-hover text-sm text-claude-text rounded-lg px-3 py-1.5 outline-none border border-claude-border"
-              >
-                {branches.map(b => (
-                  <option key={b} value={b.replace(/^\* /, '')}>{b}</option>
-                ))}
-                {branches.length === 0 && <option value="main">main</option>}
-              </select>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-claude-muted font-medium pl-1">
+                Git Branch
+              </label>
+              <div className="flex items-center gap-2">
+                <GitBranch size={13} className="text-claude-muted shrink-0" />
+                <select
+                  value={branch}
+                  onChange={e => setBranch(e.target.value)}
+                  className="flex-1 bg-claude-hover text-sm text-claude-text rounded-lg px-3 py-1.5 outline-none border border-claude-border"
+                >
+                  {branches.map(b => (
+                    <option key={b} value={b.replace(/^\* /, '')}>{b}</option>
+                  ))}
+                  {branches.length === 0 && <option value="main">main</option>}
+                </select>
+              </div>
             </div>
 
             <div className="flex flex-col gap-1">
+              <label className="text-xs text-claude-muted font-medium pl-1">
+                Session Name <span className="text-claude-orange">*</span>
+              </label>
               <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${nameError ? 'border-red-500/60 bg-red-950/10' : 'border-claude-border bg-claude-hover'}`}>
                 <Tag size={13} className="text-claude-muted shrink-0" />
                 <input
                   type="text"
-                  placeholder="session_name (e.g. feat_user_auth)"
+                  placeholder="e.g. feat_login, fix_auth_bug"
                   value={sessionName}
                   onChange={e => { setSessionName(e.target.value); setNameError('') }}
                   onBlur={() => setNameError(validateName(sessionName))}
@@ -177,6 +201,9 @@ export default function NewSessionDialog({ onClose }: Props): React.JSX.Element 
                 />
               </div>
               {nameError && <p className="text-xs text-red-400 pl-1">{nameError}</p>}
+              <p className="text-xs text-claude-muted pl-1">
+                Must be unique for this project and branch
+              </p>
             </div>
 
             {launchError && <p className="text-xs text-red-400">{launchError}</p>}
@@ -186,9 +213,22 @@ export default function NewSessionDialog({ onClose }: Props): React.JSX.Element 
               disabled={launching || !sessionName.trim()}
               className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-claude-orange text-white text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
             >
-              {launching ? <Loader size={14} className="animate-spin" /> : <Play size={14} />}
-              Launch Claude Code
+              {launching ? (
+                <>
+                  <Loader size={14} className="animate-spin" />
+                  Launching...
+                </>
+              ) : (
+                <>
+                  <Play size={14} />
+                  Start new session
+                </>
+              )}
             </button>
+
+            <p className="text-xs text-claude-muted text-center">
+              This will open a terminal and start Claude Code with full session tracking
+            </p>
           </div>
         )}
       </div>

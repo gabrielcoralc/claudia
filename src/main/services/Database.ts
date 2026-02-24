@@ -227,6 +227,23 @@ export const sessionDb = {
     const db = getDb()
     db.prepare('UPDATE sessions SET project_path = ?, project_name = ? WHERE id = ?').run(projectPath, projectName, id)
     db.prepare("INSERT OR IGNORE INTO projects (path, name, last_active_at) VALUES (?, ?, datetime('now'))").run(projectPath, projectName)
+  },
+
+  updateBranch(id: string, branch: string | null): void {
+    getDb().prepare('UPDATE sessions SET branch = ? WHERE id = ?').run(branch, id)
+  },
+
+  findDuplicate(projectPath: string, title: string, branch: string | null): Session | null {
+    const db = getDb()
+    const row = db.prepare(`
+      SELECT * FROM sessions
+      WHERE project_path = ?
+        AND title = ?
+        AND (branch = ? OR (branch IS NULL AND ? IS NULL))
+        AND source = 'app'
+      LIMIT 1
+    `).get(projectPath, title, branch, branch) as Record<string, unknown> | undefined
+    return row ? rowToSession(row) : null
   }
 }
 

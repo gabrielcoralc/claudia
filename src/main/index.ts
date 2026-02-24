@@ -36,6 +36,11 @@ function createWindow(): BrowserWindow {
     mainWindow?.show()
   })
 
+  mainWindow.on('closed', () => {
+    killAllTerminals()
+    mainWindow = null
+  })
+
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }

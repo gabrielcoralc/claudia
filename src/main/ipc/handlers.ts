@@ -5,7 +5,7 @@ import { isHooksServerRunning } from '../services/HooksServer'
 import type { Session, AnalyticsFilters } from '../../shared/types'
 import {
   createTerminal, writeTerminal, resizeTerminal, killTerminal, killAllTerminals, isTerminalRunning,
-  getUnstagedDiff, getFileDiff, revertFile, stageFile, stashChanges, getBranches, findGitRepos
+  getUnstagedDiff, getFileDiff, revertFile, stageFile, stashChanges, getBranches, getCurrentBranch, findGitRepos
 } from '../services/TerminalService'
 import { spawn, ChildProcess, exec, execFile as execFileCb } from 'child_process'
 import { promisify } from 'util'
@@ -95,6 +95,23 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     const session = sessionDb.getById(id)
     if (!session) return
     sessionDb.updateTags(id, session.tags.filter(t => t !== tag))
+  })
+
+  ipcMain.handle('sessions:updateBranch', async (_e, id: string, projectPath: string) => {
+    try {
+      const branch = await getCurrentBranch(projectPath)
+      if (branch) {
+        sessionDb.updateBranch(id, branch)
+        const updatedSession = sessionDb.getById(id)
+        if (updatedSession) {
+          win.webContents.send('event:sessionUpdated', updatedSession)
+        }
+        return { success: true, branch }
+      }
+      return { success: false, error: 'Could not detect current branch' }
+    } catch (err) {
+      return { success: false, error: String(err) }
+    }
   })
 
   ipcMain.handle('projects:list', () => projectDb.list())
@@ -215,6 +232,16 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     name: string
   }) => {
     try {
+      // Validate that no duplicate session exists (same name, project, branch)
+      const duplicate = sessionDb.findDuplicate(opts.projectPath, opts.name, opts.branch || null)
+      if (duplicate) {
+        const branchInfo = opts.branch ? ` on branch "${opts.branch}"` : ''
+        return {
+          success: false,
+          error: `Session "${opts.name}" already exists for this project${branchInfo}`
+        }
+      }
+
       // Checkout requested branch
       if (opts.branch) {
         try {

@@ -104,7 +104,7 @@ function SessionView({ session }: { session: Session }): React.JSX.Element {
   const isActive = session.status === 'active'
   const [activeTab, setActiveTab] = useState<TabId>('logs')
   const [showNewSession, setShowNewSession] = useState(false)
-  const { resumeSession } = useSessionStore()
+  const { resumeSession, deleteSession } = useSessionStore()
 
   const currentTab = isActive ? activeTab : (activeTab === 'code' ? 'logs' : activeTab)
 
@@ -116,6 +116,10 @@ function SessionView({ session }: { session: Session }): React.JSX.Element {
     await window.api.git.stash(session.projectPath)
   }, [session.projectPath])
 
+  const handleDelete = useCallback(async () => {
+    await deleteSession(session.id)
+  }, [session.id, deleteSession])
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Session header */}
@@ -126,6 +130,7 @@ function SessionView({ session }: { session: Session }): React.JSX.Element {
         session={session}
         onResume={handleResume}
         onRollback={handleRollback}
+        onDelete={handleDelete}
       />
 
       {/* Tab bar */}
@@ -205,7 +210,6 @@ export default function MainPanel(): React.JSX.Element {
       {/* Global App Header */}
       <div className="drag-region h-12 flex items-center justify-center border-b border-claude-border bg-claude-panel shrink-0">
         <div className="flex items-center gap-3">
-          <span className="text-sm font-semibold text-claude-text">Claudia</span>
           <div className="no-drag flex rounded-lg bg-claude-hover overflow-hidden">
             <button
               onClick={() => setViewMode('sessions')}

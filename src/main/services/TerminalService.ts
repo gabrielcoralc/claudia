@@ -53,13 +53,17 @@ export function createTerminal(sessionId: string, cwd: string, win: BrowserWindo
   const inst: TerminalInstance = { proc, cwd, currentId: sessionId }
 
   proc.onData((data: string) => {
-    win.webContents.send('event:terminal:data', { sessionId: inst.currentId, data })
+    if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
+      win.webContents.send('event:terminal:data', { sessionId: inst.currentId, data })
+    }
   })
 
   proc.onExit(({ exitCode, signal }: { exitCode: number; signal?: number }) => {
     console.log(`[TerminalService] onExit id=${inst.currentId} exitCode=${exitCode} signal=${signal}`)
     terminals.delete(inst.currentId)
-    win.webContents.send('event:terminal:exit', { sessionId: inst.currentId })
+    if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
+      win.webContents.send('event:terminal:exit', { sessionId: inst.currentId })
+    }
   })
 
   terminals.set(sessionId, inst)
@@ -182,6 +186,15 @@ export async function getBranches(projectPath: string): Promise<string[]> {
       .filter(Boolean)
   } catch {
     return []
+  }
+}
+
+export async function getCurrentBranch(projectPath: string): Promise<string | null> {
+  try {
+    const { stdout } = await execAsync('git branch --show-current', { cwd: projectPath })
+    return stdout.trim() || null
+  } catch {
+    return null
   }
 }
 
