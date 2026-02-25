@@ -34,7 +34,11 @@ interface SessionStore {
   setViewMode: (mode: 'sessions' | 'analytics') => void
   deleteSession: (id: string) => Promise<void>
   updateSessionTitle: (id: string, title: string) => Promise<void>
-  updateSessionBranch: (id: string, projectPath: string) => Promise<{ success: boolean; branch?: string; error?: string }>
+  updateSessionBranch: (
+    id: string,
+    projectPath: string,
+    branchName?: string
+  ) => Promise<{ success: boolean; branch?: string; error?: string }>
   openTerminalForSession: (sessionId: string, projectPath: string) => Promise<void>
   launchSessionTerminal: (launchId: string, projectPath: string) => Promise<void>
   resumeSession: (sessionId: string, projectPath: string, branch?: string) => Promise<void>
@@ -100,20 +104,20 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  selectSession: (sessionId) => {
+  selectSession: sessionId => {
     set({ selectedSessionId: sessionId })
     if (sessionId) {
       get().loadMessages(sessionId)
     }
   },
 
-  updateSession: (session) => {
+  updateSession: session => {
     set(state => ({
-      sessions: state.sessions.map(s => s.id === session.id ? session : s)
+      sessions: state.sessions.map(s => (s.id === session.id ? session : s))
     }))
   },
 
-  addSession: (session) => {
+  addSession: session => {
     set(state => {
       const exists = state.sessions.some(s => s.id === session.id)
       if (exists) return state
@@ -137,7 +141,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     })
   },
 
-  invalidateMessages: (sessionId) => {
+  invalidateMessages: sessionId => {
     set(state => {
       const newMessages = { ...state.messages }
       delete newMessages[sessionId]
@@ -147,17 +151,17 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     get().loadMessages(sessionId)
   },
 
-  updateSettings: async (partial) => {
+  updateSettings: async partial => {
     await window.api.settings.update(partial)
     const updated = await window.api.settings.get()
     set({ settings: updated })
   },
 
-  setSidebarView: (view) => set({ sidebarView: view }),
+  setSidebarView: view => set({ sidebarView: view }),
 
-  setViewMode: (mode) => set({ viewMode: mode }),
+  setViewMode: mode => set({ viewMode: mode }),
 
-  deleteSession: async (id) => {
+  deleteSession: async id => {
     await window.api.sessions.delete(id)
     set(state => {
       const next = new Set(state.activeTerminals)
@@ -177,15 +181,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   updateSessionTitle: async (id, title) => {
     await window.api.sessions.updateTitle(id, title)
     set(state => ({
-      sessions: state.sessions.map(s => s.id === id ? { ...s, title } : s)
+      sessions: state.sessions.map(s => (s.id === id ? { ...s, title } : s))
     }))
   },
 
-  updateSessionBranch: async (id, projectPath) => {
-    const result = await window.api.sessions.updateBranch(id, projectPath)
+  updateSessionBranch: async (id, projectPath, branchName?) => {
+    const result = await window.api.sessions.updateBranch(id, projectPath, branchName)
     if (result.success && result.branch) {
       set(state => ({
-        sessions: state.sessions.map(s => s.id === id ? { ...s, branch: result.branch } : s)
+        sessions: state.sessions.map(s => (s.id === id ? { ...s, branch: result.branch } : s))
       }))
     }
     return result

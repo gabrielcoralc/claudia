@@ -4,17 +4,28 @@ import { areHooksInstalled, installHooks, uninstallHooks } from '../setup/claude
 import { isHooksServerRunning } from '../services/HooksServer'
 import type { Session, AnalyticsFilters } from '../../shared/types'
 import {
-  createTerminal, writeTerminal, resizeTerminal, killTerminal, killAllTerminals, isTerminalRunning,
-  getUnstagedDiff, getFileDiff, revertFile, stageFile, stashChanges, getBranches, getCurrentBranch, findGitRepos
+  createTerminal,
+  writeTerminal,
+  resizeTerminal,
+  killTerminal,
+  killAllTerminals,
+  isTerminalRunning,
+  getUnstagedDiff,
+  getFileDiff,
+  revertFile,
+  stageFile,
+  stashChanges,
+  getBranches,
+  getCurrentBranch,
+  findGitRepos
 } from '../services/TerminalService'
-import { spawn, ChildProcess, exec, execFile as execFileCb } from 'child_process'
+import { spawn, ChildProcess, exec } from 'child_process'
 import { promisify } from 'util'
 import { basename } from 'path'
 import which from 'which'
 import { registerPendingLaunch } from '../services/FileWatcher'
 
 const execAsync = promisify(exec)
-const execFileAsync = promisify(execFileCb)
 
 const runningProcesses = new Map<number, ChildProcess>()
 
@@ -26,9 +37,12 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   })
 
   // Reviews
-  ipcMain.handle('reviews:save', (_e, sessionId: string, reviewType: string, scope: string, filePath: string | null, content: string) => {
-    reviewDb.upsert(sessionId, reviewType, scope, filePath, content)
-  })
+  ipcMain.handle(
+    'reviews:save',
+    (_e, sessionId: string, reviewType: string, scope: string, filePath: string | null, content: string) => {
+      reviewDb.upsert(sessionId, reviewType, scope, filePath, content)
+    }
+  )
 
   ipcMain.handle('reviews:getBySession', (_e, sessionId: string) => {
     return reviewDb.getBySession(sessionId)
@@ -39,6 +53,10 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   })
 
   ipcMain.handle('sessions:list', () => sessionDb.list())
+
+  ipcMain.handle('sessions:listByProjectAndBranch', (_e, projectPath: string, branch?: string) => {
+    return sessionDb.listByProjectAndBranch(projectPath, branch)
+  })
 
   ipcMain.handle('sessions:get', (_e, id: string) => sessionDb.getById(id))
 
@@ -62,15 +80,13 @@ export function registerIpcHandlers(win: BrowserWindow): void {
 
   ipcMain.handle('sessions:delete', (_e, id: string) => sessionDb.delete(id))
 
-  ipcMain.handle('sessions:updateTitle', (_e, id: string, title: string) =>
-    sessionDb.updateTitle(id, title)
-  )
+  ipcMain.handle('sessions:updateTitle', (_e, id: string, title: string) => sessionDb.updateTitle(id, title))
 
   ipcMain.handle('sessions:updateStatus', (_e, id: string, status: string) => {
     console.log(`[IPC] sessions:updateStatus id=${id} status=${status}`)
     const endedAt = status === 'completed' ? new Date().toISOString() : undefined
     sessionDb.updateStatus(id, status as Session['status'], endedAt)
-    
+
     // Emit event so frontend updates the session status
     const updatedSession = sessionDb.getById(id)
     if (updatedSession) {
@@ -94,12 +110,16 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   ipcMain.handle('sessions:removeTag', (_e, id: string, tag: string) => {
     const session = sessionDb.getById(id)
     if (!session) return
-    sessionDb.updateTags(id, session.tags.filter(t => t !== tag))
+    sessionDb.updateTags(
+      id,
+      session.tags.filter(t => t !== tag)
+    )
   })
 
-  ipcMain.handle('sessions:updateBranch', async (_e, id: string, projectPath: string) => {
+  ipcMain.handle('sessions:updateBranch', async (_e, id: string, projectPath: string, branchName?: string) => {
     try {
-      const branch = await getCurrentBranch(projectPath)
+      // Use provided branch name or auto-detect from project
+      const branch = branchName || (await getCurrentBranch(projectPath))
       if (branch) {
         sessionDb.updateBranch(id, branch)
         const updatedSession = sessionDb.getById(id)
@@ -130,93 +150,104 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   }))
 
   // Analytics
-  ipcMain.handle('analytics:getGlobalMetrics', (_e, filters: AnalyticsFilters) => 
-    analyticsDb.getGlobalMetrics(filters))
+  ipcMain.handle('analytics:getGlobalMetrics', (_e, filters: AnalyticsFilters) => analyticsDb.getGlobalMetrics(filters))
 
-  ipcMain.handle('analytics:getTopSessions', (_e, limit: number, filters: AnalyticsFilters) => 
-    analyticsDb.getTopSessions(limit, filters))
+  ipcMain.handle('analytics:getTopSessions', (_e, limit: number, filters: AnalyticsFilters) =>
+    analyticsDb.getTopSessions(limit, filters)
+  )
 
-  ipcMain.handle('analytics:getProjectMetrics', (_e, filters: AnalyticsFilters) => 
-    analyticsDb.getProjectMetrics(filters))
+  ipcMain.handle('analytics:getProjectMetrics', (_e, filters: AnalyticsFilters) =>
+    analyticsDb.getProjectMetrics(filters)
+  )
 
-  ipcMain.handle('analytics:getDailyMetrics', (_e, filters: AnalyticsFilters) => 
-    analyticsDb.getDailyMetrics(filters))
+  ipcMain.handle('analytics:getDailyMetrics', (_e, filters: AnalyticsFilters) => analyticsDb.getDailyMetrics(filters))
 
-  ipcMain.handle('analytics:getSessionDailyBreakdown', (_e, filters: AnalyticsFilters) => 
-    analyticsDb.getSessionDailyBreakdown(filters))
+  ipcMain.handle('analytics:getSessionDailyBreakdown', (_e, filters: AnalyticsFilters) =>
+    analyticsDb.getSessionDailyBreakdown(filters)
+  )
 
-  ipcMain.handle('analytics:getProjectDailyBreakdown', (_e, filters: AnalyticsFilters) => 
-    analyticsDb.getProjectDailyBreakdown(filters))
+  ipcMain.handle('analytics:getProjectDailyBreakdown', (_e, filters: AnalyticsFilters) =>
+    analyticsDb.getProjectDailyBreakdown(filters)
+  )
 
-  ipcMain.handle('claude:launch', async (_e, opts: {
-    cwd: string
-    prompt?: string
-    sessionId?: string
-    resume?: boolean
-  }) => {
-    try {
-      const settings = settingsDb.get()
-      let claudePath = settings.claudeExecutablePath
-
-      if (!claudePath) {
-        try {
-          claudePath = await which('claude')
-        } catch {
-          return { success: false, error: 'Claude Code not found in PATH. Install it with: npm install -g @anthropic-ai/claude-code' }
-        }
+  ipcMain.handle(
+    'claude:launch',
+    async (
+      _e,
+      opts: {
+        cwd: string
+        prompt?: string
+        sessionId?: string
+        resume?: boolean
       }
+    ) => {
+      try {
+        const settings = settingsDb.get()
+        let claudePath = settings.claudeExecutablePath
 
-      const args: string[] = ['--output-format', 'stream-json', '--verbose']
-
-      if (opts.resume && opts.sessionId) {
-        args.push('--resume', opts.sessionId)
-      }
-
-      if (settings.defaultAllowedTools.length > 0) {
-        args.push('--allowedTools', settings.defaultAllowedTools.join(','))
-      }
-
-      if (opts.prompt) {
-        args.push('-p', opts.prompt)
-      }
-
-      const child = spawn(claudePath, args, {
-        cwd: opts.cwd,
-        env: { ...process.env },
-        stdio: ['pipe', 'pipe', 'pipe']
-      })
-
-      if (!child.pid) {
-        return { success: false, error: 'Failed to spawn process' }
-      }
-
-      runningProcesses.set(child.pid, child)
-
-      child.stdout?.on('data', (data: Buffer) => {
-        const lines = data.toString().split('\n')
-        for (const line of lines) {
-          if (!line.trim()) continue
+        if (!claudePath) {
           try {
-            const event = JSON.parse(line)
-            win.webContents.send('event:claudeStreamEvent', { pid: child.pid, event })
-          } catch {}
+            claudePath = await which('claude')
+          } catch {
+            return {
+              success: false,
+              error: 'Claude Code not found in PATH. Install it with: npm install -g @anthropic-ai/claude-code'
+            }
+          }
         }
-      })
 
-      child.stderr?.on('data', (data: Buffer) => {
-        win.webContents.send('event:claudeStreamError', { pid: child.pid, error: data.toString() })
-      })
+        const args: string[] = ['--output-format', 'stream-json', '--verbose']
 
-      child.on('exit', (code) => {
-        if (child.pid) runningProcesses.delete(child.pid)
-        win.webContents.send('event:claudeProcessExit', { pid: child.pid, code })
-      })
+        if (opts.resume && opts.sessionId) {
+          args.push('--resume', opts.sessionId)
+        }
 
-      return { success: true, pid: child.pid }
-    } catch (err) {
-      return { success: false, error: String(err) }
+        if (settings.defaultAllowedTools.length > 0) {
+          args.push('--allowedTools', settings.defaultAllowedTools.join(','))
+        }
+
+        if (opts.prompt) {
+          args.push('-p', opts.prompt)
+        }
+
+        const child = spawn(claudePath, args, {
+          cwd: opts.cwd,
+          env: { ...process.env },
+          stdio: ['pipe', 'pipe', 'pipe']
+        })
+
+        if (!child.pid) {
+          return { success: false, error: 'Failed to spawn process' }
+        }
+
+        runningProcesses.set(child.pid, child)
+
+        child.stdout?.on('data', (data: Buffer) => {
+          const lines = data.toString().split('\n')
+          for (const line of lines) {
+            if (!line.trim()) continue
+            try {
+              const event = JSON.parse(line)
+              win.webContents.send('event:claudeStreamEvent', { pid: child.pid, event })
+            } catch {}
+          }
+        })
+
+        child.stderr?.on('data', (data: Buffer) => {
+          win.webContents.send('event:claudeStreamError', { pid: child.pid, error: data.toString() })
+        })
+
+        child.on('exit', code => {
+          if (child.pid) runningProcesses.delete(child.pid)
+          win.webContents.send('event:claudeProcessExit', { pid: child.pid, code })
+        })
+
+        return { success: true, pid: child.pid }
+      } catch (err) {
+        return { success: false, error: String(err) }
+      }
     }
-  })
+  )
 
   ipcMain.handle('claude:kill', (_e, pid: number) => {
     const proc = runningProcesses.get(pid)
@@ -226,69 +257,77 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     }
   })
 
-  ipcMain.handle('sessions:launchNew', async (_e, opts: {
-    projectPath: string
-    branch: string
-    name: string
-  }) => {
-    try {
-      // Validate that no duplicate session exists (same name, project, branch)
-      const duplicate = sessionDb.findDuplicate(opts.projectPath, opts.name, opts.branch || null)
-      if (duplicate) {
-        const branchInfo = opts.branch ? ` on branch "${opts.branch}"` : ''
-        return {
-          success: false,
-          error: `Session "${opts.name}" already exists for this project${branchInfo}`
+  ipcMain.handle(
+    'sessions:launchNew',
+    async (
+      _e,
+      opts: {
+        projectPath: string
+        branch: string
+        name: string
+      }
+    ) => {
+      try {
+        // Validate that no duplicate session exists (same name, project, branch)
+        const duplicate = sessionDb.findDuplicate(opts.projectPath, opts.name, opts.branch || null)
+        if (duplicate) {
+          const branchInfo = opts.branch ? ` on branch "${opts.branch}"` : ''
+          return {
+            success: false,
+            error: `Session "${opts.name}" already exists for this project${branchInfo}`
+          }
         }
-      }
 
-      // Checkout requested branch
-      if (opts.branch) {
-        try {
-          await execAsync(`git checkout "${opts.branch}"`, { cwd: opts.projectPath })
-          console.log(`[sessions:launchNew] Checked out branch: ${opts.branch}`)
-        } catch (e) {
-          // Branch checkout failure is non-fatal — continue with current branch
-          console.warn(`[sessions:launchNew] Branch checkout failed (non-fatal):`, e)
+        // Checkout requested branch
+        if (opts.branch) {
+          try {
+            await execAsync(`git checkout "${opts.branch}"`, { cwd: opts.projectPath })
+            console.log(`[sessions:launchNew] Checked out branch: ${opts.branch}`)
+          } catch (e) {
+            // Branch checkout failure is non-fatal — continue with current branch
+            console.warn(`[sessions:launchNew] Branch checkout failed (non-fatal):`, e)
+          }
         }
+
+        const launchId = `launch-${Date.now()}`
+        console.log(
+          `[sessions:launchNew] Registering pending launch id=${launchId} project=${opts.projectPath} name=${opts.name}`
+        )
+
+        // Register pending launch so HooksServer can link the terminal when SessionStart fires.
+        registerPendingLaunch(opts.projectPath, launchId, opts.name, opts.branch)
+
+        // Insert provisional session in DB immediately so it appears in the sidebar.
+        // transcriptPath is empty — will be filled when FileWatcher picks up the JSONL.
+        const now = new Date().toISOString()
+        const projectName = basename(opts.projectPath)
+        const provisionalSession = {
+          id: launchId,
+          projectPath: opts.projectPath,
+          projectName,
+          transcriptPath: '',
+          startedAt: now,
+          model: 'claude-opus-4-5',
+          status: 'active' as const,
+          totalCostUsd: 0,
+          totalInputTokens: 0,
+          totalOutputTokens: 0,
+          messageCount: 0,
+          title: opts.name,
+          tags: [],
+          branch: opts.branch || undefined,
+          source: 'app' as const
+        }
+        sessionDb.upsert(provisionalSession)
+        win.webContents.send('event:newSession', provisionalSession)
+        console.log(`[sessions:launchNew] Provisional session created id=${launchId}`)
+
+        return { success: true, launchId }
+      } catch (err) {
+        return { success: false, error: String(err) }
       }
-
-      const launchId = `launch-${Date.now()}`
-      console.log(`[sessions:launchNew] Registering pending launch id=${launchId} project=${opts.projectPath} name=${opts.name}`)
-
-      // Register pending launch so HooksServer can link the terminal when SessionStart fires.
-      registerPendingLaunch(opts.projectPath, launchId, opts.name, opts.branch)
-
-      // Insert provisional session in DB immediately so it appears in the sidebar.
-      // transcriptPath is empty — will be filled when FileWatcher picks up the JSONL.
-      const now = new Date().toISOString()
-      const projectName = basename(opts.projectPath)
-      const provisionalSession = {
-        id: launchId,
-        projectPath: opts.projectPath,
-        projectName,
-        transcriptPath: '',
-        startedAt: now,
-        model: 'claude-opus-4-5',
-        status: 'active' as const,
-        totalCostUsd: 0,
-        totalInputTokens: 0,
-        totalOutputTokens: 0,
-        messageCount: 0,
-        title: opts.name,
-        tags: [],
-        branch: opts.branch || undefined,
-        source: 'app' as const
-      }
-      sessionDb.upsert(provisionalSession)
-      win.webContents.send('event:newSession', provisionalSession)
-      console.log(`[sessions:launchNew] Provisional session created id=${launchId}`)
-
-      return { success: true, launchId }
-    } catch (err) {
-      return { success: false, error: String(err) }
     }
-  })
+  )
 
   // ─── Terminal handlers ───────────────────────────────────────────────────
   ipcMain.handle('terminal:create', (_e, sessionId: string, cwd: string) => {
@@ -351,79 +390,89 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     return result.canceled ? null : result.filePaths[0]
   })
 
-  ipcMain.handle('git:reviewWithClaude', async (_e, opts: {
-    projectPath: string
-    prompt: string
-  }) => {
-    console.log(`[git:reviewWithClaude] START cwd=${opts.projectPath} prompt=${opts.prompt.slice(0, 120)}…`)
-    try {
-      const settings = settingsDb.get()
-      let claudePath = settings.claudeExecutablePath
-      if (!claudePath) {
-        claudePath = await which('claude')
-        console.log(`[git:reviewWithClaude] Resolved claude path via which: ${claudePath}`)
-      } else {
-        console.log(`[git:reviewWithClaude] Using configured claude path: ${claudePath}`)
+  ipcMain.handle(
+    'git:reviewWithClaude',
+    async (
+      _e,
+      opts: {
+        projectPath: string
+        prompt: string
       }
+    ) => {
+      console.log(`[git:reviewWithClaude] START cwd=${opts.projectPath} prompt=${opts.prompt.slice(0, 120)}…`)
+      try {
+        const settings = settingsDb.get()
+        let claudePath = settings.claudeExecutablePath
+        if (!claudePath) {
+          claudePath = await which('claude')
+          console.log(`[git:reviewWithClaude] Resolved claude path via which: ${claudePath}`)
+        } else {
+          console.log(`[git:reviewWithClaude] Using configured claude path: ${claudePath}`)
+        }
 
-      const args = ['-p', opts.prompt, '--output-format', 'json', '--max-turns', '10']
-      console.log(`[git:reviewWithClaude] Spawning: ${claudePath} args=${args.map(a => a.length > 80 ? a.slice(0, 80) + '…' : a).join(' ')}`)
+        const args = ['-p', opts.prompt, '--output-format', 'json', '--max-turns', '10']
+        console.log(
+          `[git:reviewWithClaude] Spawning: ${claudePath} args=${args.map(a => (a.length > 80 ? a.slice(0, 80) + '…' : a)).join(' ')}`
+        )
 
-      return await new Promise<{ success: boolean; response?: string; error?: string }>((resolve) => {
-        const child = spawn(claudePath, args, {
-          cwd: opts.projectPath,
-          env: { ...process.env },
-          stdio: ['ignore', 'pipe', 'pipe']
+        return await new Promise<{ success: boolean; response?: string; error?: string }>(resolve => {
+          const child = spawn(claudePath, args, {
+            cwd: opts.projectPath,
+            env: { ...process.env },
+            stdio: ['ignore', 'pipe', 'pipe']
+          })
+
+          let stdout = ''
+          let stderr = ''
+          const timer = setTimeout(() => {
+            console.warn(`[git:reviewWithClaude] TIMEOUT (180s) — killing process`)
+            child.kill('SIGTERM')
+          }, 180_000)
+
+          child.stdout?.on('data', (data: Buffer) => {
+            stdout += data.toString()
+            console.log(`[git:reviewWithClaude] stdout chunk +${data.length} bytes (total: ${stdout.length})`)
+          })
+
+          child.stderr?.on('data', (data: Buffer) => {
+            stderr += data.toString()
+          })
+
+          child.on('error', err => {
+            clearTimeout(timer)
+            console.error(`[git:reviewWithClaude] spawn error:`, err)
+            resolve({ success: false, error: String(err) })
+          })
+
+          child.on('close', code => {
+            clearTimeout(timer)
+            console.log(
+              `[git:reviewWithClaude] process exited code=${code} stdout=${stdout.length}b stderr=${stderr.length}b`
+            )
+            if (stderr) console.warn(`[git:reviewWithClaude] stderr: ${stderr.slice(0, 300)}`)
+
+            if (code !== 0 && !stdout) {
+              resolve({ success: false, error: `claude exited with code ${code}: ${stderr.slice(0, 500)}` })
+              return
+            }
+
+            try {
+              const parsed = JSON.parse(stdout)
+              const response = parsed.result ?? parsed.content ?? stdout
+              console.log(`[git:reviewWithClaude] SUCCESS parsed JSON, response length=${String(response).length}`)
+              resolve({ success: true, response })
+            } catch {
+              console.log(`[git:reviewWithClaude] returning raw stdout`)
+              resolve({ success: true, response: stdout || stderr || '(no output)' })
+            }
+          })
         })
-
-        let stdout = ''
-        let stderr = ''
-        const timer = setTimeout(() => {
-          console.warn(`[git:reviewWithClaude] TIMEOUT (180s) — killing process`)
-          child.kill('SIGTERM')
-        }, 180_000)
-
-        child.stdout?.on('data', (data: Buffer) => {
-          stdout += data.toString()
-          console.log(`[git:reviewWithClaude] stdout chunk +${data.length} bytes (total: ${stdout.length})`)
-        })
-
-        child.stderr?.on('data', (data: Buffer) => {
-          stderr += data.toString()
-        })
-
-        child.on('error', (err) => {
-          clearTimeout(timer)
-          console.error(`[git:reviewWithClaude] spawn error:`, err)
-          resolve({ success: false, error: String(err) })
-        })
-
-        child.on('close', (code) => {
-          clearTimeout(timer)
-          console.log(`[git:reviewWithClaude] process exited code=${code} stdout=${stdout.length}b stderr=${stderr.length}b`)
-          if (stderr) console.warn(`[git:reviewWithClaude] stderr: ${stderr.slice(0, 300)}`)
-
-          if (code !== 0 && !stdout) {
-            resolve({ success: false, error: `claude exited with code ${code}: ${stderr.slice(0, 500)}` })
-            return
-          }
-
-          try {
-            const parsed = JSON.parse(stdout)
-            const response = parsed.result ?? parsed.content ?? stdout
-            console.log(`[git:reviewWithClaude] SUCCESS parsed JSON, response length=${String(response).length}`)
-            resolve({ success: true, response })
-          } catch {
-            console.log(`[git:reviewWithClaude] returning raw stdout`)
-            resolve({ success: true, response: stdout || stderr || '(no output)' })
-          }
-        })
-      })
-    } catch (err) {
-      console.error(`[git:reviewWithClaude] ERROR:`, err)
-      return { success: false, error: String(err) }
+      } catch (err) {
+        console.error(`[git:reviewWithClaude] ERROR:`, err)
+        return { success: false, error: String(err) }
+      }
     }
-  })
+  )
 }
 
 export function cleanupProcesses(): void {

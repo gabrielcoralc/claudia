@@ -1,12 +1,22 @@
-import React from 'react'
-import { Sparkles, Zap, BarChart3, Database, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import React, { useState } from 'react'
+import { Zap, BarChart3, Database, Plus, RefreshCw, Trash2, History } from 'lucide-react'
 import claudiaIcon from '../../assets/claudia-icon.png'
+import ImportSessionDialog from './ImportSessionDialog'
+import { useSessionStore } from '../../stores/sessionStore'
 
 interface Props {
   onNewSession?: () => void
 }
 
 export default function WelcomeScreen({ onNewSession }: Props): React.JSX.Element {
+  const [showImportDialog, setShowImportDialog] = useState(false)
+  const { selectSession } = useSessionStore()
+
+  const handleImportSession = (sessionId: string) => {
+    selectSession(sessionId)
+    setShowImportDialog(false)
+  }
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-8 bg-claude-dark p-8">
       <div className="text-center">
@@ -15,7 +25,8 @@ export default function WelcomeScreen({ onNewSession }: Props): React.JSX.Elemen
         </div>
         <h1 className="text-3xl font-semibold text-claude-text mb-3">Claudia</h1>
         <p className="text-claude-muted text-sm max-w-md">
-          Professional session manager for Claude Code. Launch, track, and analyze your AI-powered development sessions with full analytics and cost monitoring.
+          Professional session manager for Claude Code. Launch, track, and analyze your AI-powered development sessions
+          with full analytics and cost monitoring.
         </p>
       </div>
 
@@ -37,7 +48,10 @@ export default function WelcomeScreen({ onNewSession }: Props): React.JSX.Elemen
             desc: 'Sessions grouped by project and branch with unique naming and duplicate prevention'
           }
         ].map(({ icon: Icon, title, desc }) => (
-          <div key={title} className="bg-claude-panel border border-claude-border rounded-xl p-5 hover:border-claude-orange/30 transition-colors">
+          <div
+            key={title}
+            className="bg-claude-panel border border-claude-border rounded-xl p-5 hover:border-claude-orange/30 transition-colors"
+          >
             <Icon size={22} className="text-claude-orange mb-3" />
             <div className="text-sm font-semibold text-claude-text mb-2">{title}</div>
             <div className="text-xs text-claude-muted leading-relaxed">{desc}</div>
@@ -52,9 +66,7 @@ export default function WelcomeScreen({ onNewSession }: Props): React.JSX.Elemen
           </div>
           <div>
             <p className="text-sm font-semibold text-claude-text mb-1">New: Session Controls</p>
-            <p className="text-xs text-claude-muted mb-3">
-              Manage your sessions with powerful new tools:
-            </p>
+            <p className="text-xs text-claude-muted mb-3">Manage your sessions with powerful new tools:</p>
             <div className="flex flex-wrap gap-2">
               <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-claude-hover text-xs text-claude-text">
                 <RefreshCw size={11} className="text-claude-orange" />
@@ -74,13 +86,26 @@ export default function WelcomeScreen({ onNewSession }: Props): React.JSX.Elemen
       </div>
 
       {onNewSession && (
-        <button
-          onClick={onNewSession}
-          className="flex items-center gap-2 px-6 py-3 rounded-xl bg-claude-orange text-white text-sm font-semibold hover:opacity-90 transition-opacity shadow-lg shadow-claude-orange/20"
-        >
-          <Plus size={18} />
-          Start New Session
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setShowImportDialog(true)}
+            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-claude-panel border border-claude-border text-claude-text text-sm font-semibold hover:border-claude-orange/40 transition-colors"
+          >
+            <History size={18} />
+            Import Session
+          </button>
+          <button
+            onClick={onNewSession}
+            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-claude-orange text-white text-sm font-semibold hover:opacity-90 transition-opacity shadow-lg shadow-claude-orange/20"
+          >
+            <Plus size={18} />
+            Start New Session
+          </button>
+        </div>
+      )}
+
+      {showImportDialog && (
+        <ImportSessionDialog onClose={() => setShowImportDialog(false)} onImport={handleImportSession} />
       )}
     </div>
   )

@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { RotateCcw, Play, Loader, Lightbulb, RefreshCw, Trash2 } from 'lucide-react'
 import type { Session } from '../../../../shared/types'
 import { useSessionStore } from '../../stores/sessionStore'
+import UpdateBranchDialog from './UpdateBranchDialog'
 
 interface Props {
   session: Session
@@ -17,6 +18,7 @@ export default function SessionControls({ session, onResume, onRollback, onDelet
   const [updating, setUpdating] = useState(false)
   const [updateMsg, setUpdateMsg] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const [showBranchDialog, setShowBranchDialog] = useState(false)
   const { updateSessionBranch } = useSessionStore()
 
   const handleResume = async () => {
@@ -47,11 +49,15 @@ export default function SessionControls({ session, onResume, onRollback, onDelet
     }
   }
 
-  const handleUpdateBranch = async () => {
+  const handleUpdateBranch = () => {
+    setShowBranchDialog(true)
+  }
+
+  const handleBranchSelected = async (branchName: string) => {
     setUpdating(true)
     setUpdateMsg('')
     try {
-      const result = await updateSessionBranch(session.id, session.projectPath)
+      const result = await updateSessionBranch(session.id, session.projectPath, branchName)
       if (result.success && result.branch) {
         setUpdateMsg(`→ ${result.branch} ✓`)
         setTimeout(() => setUpdateMsg(''), 3000)
@@ -150,6 +156,15 @@ export default function SessionControls({ session, onResume, onRollback, onDelet
       <span className="ml-auto text-xs text-claude-muted font-mono" title={session.id}>
         {session.id}
       </span>
+
+      {showBranchDialog && (
+        <UpdateBranchDialog
+          projectPath={session.projectPath}
+          currentBranch={session.branch}
+          onClose={() => setShowBranchDialog(false)}
+          onSelect={handleBranchSelected}
+        />
+      )}
     </div>
   )
 }

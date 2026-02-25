@@ -33,24 +33,45 @@ export default function ChatView({ session }: Props): React.JSX.Element {
     setAutoScroll(atBottom)
   }
 
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    })
+  }
+
   return (
     <div className="flex flex-col h-full">
       <ChatHeader session={session} />
       <CostBar session={session} />
 
-      <div
-        ref={containerRef}
-        onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-4 py-4 space-y-2"
-      >
+      {/* View-Only Banner for Completed/Historical Sessions */}
+      {session.status === 'completed' && (
+        <div className="bg-blue-500/10 border-b border-blue-500/20 px-4 py-2">
+          <p className="text-xs text-blue-400">
+            📖 Viewing historical session from {formatDate(session.startedAt)}. This session is view-only.
+          </p>
+        </div>
+      )}
+
+      {/* Active Session Warning */}
+      {session.status === 'active' && (
+        <div className="bg-green-500/10 border-b border-green-500/20 px-4 py-2">
+          <p className="text-xs text-green-400">🟢 This session is currently active</p>
+        </div>
+      )}
+
+      <div ref={containerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
         {sessionMessages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-claude-muted text-sm">No messages yet</p>
           </div>
         ) : (
-          sessionMessages.map((msg, idx) => (
-            <MessageBubble key={msg.id || idx} message={msg} />
-          ))
+          sessionMessages.map((msg, idx) => <MessageBubble key={msg.id || idx} message={msg} />)
         )}
         <div ref={bottomRef} />
       </div>

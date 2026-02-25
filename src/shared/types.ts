@@ -213,6 +213,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 export interface IpcChannels {
   // Sessions
   'sessions:list': () => Session[]
+  'sessions:listByProjectAndBranch': (projectPath: string, branch?: string) => Session[]
   'sessions:get': (id: string) => Session | null
   'sessions:getMessages': (id: string) => ClaudeMessage[]
   'sessions:getCostSummary': (id: string) => SessionCostSummary | null
@@ -221,7 +222,11 @@ export interface IpcChannels {
   'sessions:updateStatus': (id: string, status: SessionStatus) => void
   'sessions:addTag': (id: string, tag: string) => void
   'sessions:removeTag': (id: string, tag: string) => void
-  'sessions:updateBranch': (id: string, projectPath: string) => { success: boolean; branch?: string; error?: string }
+  'sessions:updateBranch': (
+    id: string,
+    projectPath: string,
+    branchName?: string
+  ) => { success: boolean; branch?: string; error?: string }
 
   // Projects
   'projects:list': () => Project[]
