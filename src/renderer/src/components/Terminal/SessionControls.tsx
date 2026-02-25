@@ -21,10 +21,21 @@ export default function SessionControls({ session, onResume, onRollback, onDelet
 
   const handleResume = async () => {
     setResuming(true)
-    try { await onResume() } finally { setResuming(false) }
+    try {
+      await onResume()
+    } finally {
+      setResuming(false)
+    }
   }
 
   const handleRollback = async () => {
+    const confirmed = window.confirm(
+      `Rollback session changes using git stash?\n\n` +
+        `This will stash all uncommitted changes in "${session.projectPath}".\n` +
+        `You can recover them later with "git stash pop".`
+    )
+    if (!confirmed) return
+
     setRolling(true)
     setRollbackMsg('')
     try {
@@ -56,7 +67,7 @@ export default function SessionControls({ session, onResume, onRollback, onDelet
   const handleDelete = async () => {
     const confirmed = window.confirm(
       `Delete session "${session.title || session.id}"?\n\n` +
-      `This will remove the session from the database but keep all files intact.`
+        `This will remove the session from the database but keep all files intact.`
     )
     if (!confirmed) return
 
@@ -83,7 +94,11 @@ export default function SessionControls({ session, onResume, onRollback, onDelet
       <button
         onClick={handleUpdateBranch}
         disabled={session.status === 'active' || updating}
-        title={session.status === 'active' ? 'Cannot update branch while session is active' : 'Detect and update git branch for this session'}
+        title={
+          session.status === 'active'
+            ? 'Cannot update branch while session is active'
+            : 'Detect and update git branch for this session'
+        }
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-claude-muted hover:text-claude-text hover:bg-claude-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {updating ? <Loader size={13} className="animate-spin" /> : <RefreshCw size={13} />}
@@ -93,7 +108,11 @@ export default function SessionControls({ session, onResume, onRollback, onDelet
       <button
         onClick={handleDelete}
         disabled={session.status === 'active' || deleting}
-        title={session.status === 'active' ? 'Cannot delete while session is active' : 'Delete this session (keeps files, removes from database)'}
+        title={
+          session.status === 'active'
+            ? 'Cannot delete while session is active'
+            : 'Delete this session (keeps files, removes from database)'
+        }
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-red-400 hover:text-red-300 hover:bg-red-950/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {deleting ? <Loader size={13} className="animate-spin" /> : <Trash2 size={13} />}
@@ -120,9 +139,7 @@ export default function SessionControls({ session, onResume, onRollback, onDelet
         </button>
       )}
 
-      {rollbackMsg && (
-        <span className="text-xs text-green-400 ml-2">{rollbackMsg}</span>
-      )}
+      {rollbackMsg && <span className="text-xs text-green-400 ml-2">{rollbackMsg}</span>}
 
       {updateMsg && (
         <span className={`text-xs ml-2 ${updateMsg.includes('Failed') ? 'text-red-400' : 'text-green-400'}`}>
