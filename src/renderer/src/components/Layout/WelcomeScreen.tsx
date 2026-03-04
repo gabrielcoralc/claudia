@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Zap, BarChart3, Database, Plus, RefreshCw, Trash2, History } from 'lucide-react'
+import { Zap, BarChart3, Database, Plus, History, Star, ExternalLink } from 'lucide-react'
 import claudiaIcon from '../../assets/claudia-icon.png'
 import ImportSessionDialog from './ImportSessionDialog'
 import { useSessionStore } from '../../stores/sessionStore'
@@ -60,28 +60,28 @@ export default function WelcomeScreen({ onNewSession }: Props): React.JSX.Elemen
       </div>
 
       <div className="bg-claude-panel border border-claude-border rounded-xl p-5 max-w-2xl w-full">
-        <div className="flex items-start gap-3 mb-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-claude-dark to-gray-900 flex items-center justify-center shrink-0 border border-claude-orange/20">
-            <img src={claudiaIcon} alt="Claudia" className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-claude-text mb-1">New: Session Controls</p>
-            <p className="text-xs text-claude-muted mb-3">Manage your sessions with powerful new tools:</p>
-            <div className="flex flex-wrap gap-2">
-              <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-claude-hover text-xs text-claude-text">
-                <RefreshCw size={11} className="text-claude-orange" />
-                Update Branch
-              </div>
-              <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-claude-hover text-xs text-claude-text">
-                <Trash2 size={11} className="text-red-400" />
-                Delete Session
-              </div>
-              <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-claude-hover text-xs text-claude-text">
-                <BarChart3 size={11} className="text-blue-400" />
-                Full Analytics
-              </div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 flex items-center justify-center shrink-0 border border-yellow-500/30">
+              <Star size={16} className="text-yellow-500 fill-yellow-500" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-claude-text mb-1">Love Claudia?</p>
+              <p className="text-xs text-claude-muted">
+                Support the project by leaving a star on GitHub. Your support helps us keep improving!
+              </p>
             </div>
           </div>
+          <a
+            href="https://github.com/gabrielcoralc/claudia"
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-claude-hover border border-claude-border text-claude-text text-xs font-semibold hover:border-yellow-500/40 transition-colors shrink-0"
+          >
+            <Star size={14} className="text-yellow-500" />
+            Star on GitHub
+            <ExternalLink size={12} className="text-claude-muted" />
+          </a>
         </div>
       </div>
 

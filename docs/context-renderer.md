@@ -76,6 +76,14 @@ Single Zustand store (`useSessionStore`) holding all global UI state.
 
 **`addSession(session)`** — Deduplicates by id before prepending.
 
+### Session import & analytics actions
+
+**`scanExternalSessions(projectPath, branch?)`** — Scans `~/.claude/projects/` for external .jsonl files not yet in DB. Returns array of external sessions with metadata (title, date, message count, cost). Used by `ImportSessionDialog` step 3.
+
+**`importExternalSession(sessionId, name, branch?)`** — Imports an external session by marking it as `source='app'` in DB, assigning the user-provided name, and starting file watch. Used by `ImportSessionDialog` step 4.
+
+**`getDailyMetrics(startDate, endDate, projectFilter?)`** — Fetches daily aggregated metrics (cost, tokens, session count) for analytics dashboard. Returns array of `DailyMetric` objects grouped by date.
+
 ---
 
 ## Utility — `utils/messageGrouper.ts`
@@ -143,6 +151,100 @@ App.tsx
 
 ---
 
+## Analytics
+
+Analytics system for tracking session costs, token usage, and trends over time.
+
+### `AnalyticsPanel.tsx` — Full analytics dashboard
+
+Main analytics view with three visualization modes:
+- **Daily Cost Trend** (area chart) — Shows cost progression over time
+- **Project Comparison** (bar chart) — Compares total cost across projects
+- **Session Distribution** (pie chart) — Visualizes cost distribution per session
+
+**Features**:
+- Fetches daily metrics via `sessions.getDailyMetrics(startDate, endDate, projectFilter?)`
+- Four stat cards: Total Cost, Total Tokens, Total Sessions, Avg Cost/Session
+- Responsive charts powered by Recharts (ResponsiveContainer, AreaChart, BarChart, PieChart)
+- Custom tooltips with formatted currency and token counts
+- Color scheme matches Claude brand (orange accent)
+
+**State management**:
+- Local state for metrics data, loading, error
+- Refresh mechanism with loading indicator
+- Integration with `AnalyticsFiltersBar` for filtering
+
+### `AnalyticsFiltersBar.tsx` — Filter controls
+
+Provides filtering and configuration for analytics view:
+- **Date range presets**: Last 7 days, Last 30 days, Last 90 days, All time, Custom
+- **Custom date picker**: Start and end date selection with calendar UI
+- **Project filter**: Multi-select dropdown for filtering by specific projects
+- **Metric selector**: Toggle between Cost, Tokens, Sessions views
+- **Refresh button**: Manual data reload with loading state
+
+**Implementation notes**:
+- Uses lucide icons for visual indicators
+- Validates date ranges (end date must be after start date)
+- Formats dates as YYYY-MM-DD for API calls
+- Persists filter state in URL query params (future enhancement)
+
+---
+
+## Session Import
+
+### `ImportSessionDialog.tsx` — 4-step import wizard
+
+Modal dialog for importing external Claude Code sessions (those not started from Claudia).
+
+**Step 1: Select Project**
+- Loads projects via `projects.list()` and scans for repos in settings root dir
+- Filters to show only projects NOT already imported
+- Search functionality across project names and paths
+- Displays project name, path, and session count
+
+**Step 2: Select Branch Filter**
+- Fetches branches via `git:branches(projectPath)`
+- Options: "All branches" or specific branch
+- Used to filter external sessions in next step
+
+**Step 3: Scan External Sessions**
+- Calls `sessions.scanExternal(projectPath, branch?)`
+- Displays list of detected external sessions with metadata:
+  - Session title (or first 50 chars of first message)
+  - Created date (formatted as relative time)
+  - Message count
+  - Total cost
+  - Branch badge (if available)
+- Shows validation status (✓ valid or ⚠️ invalid with reason)
+- Displays count of invalid sessions in banner
+- Search/filter within results
+
+**Step 4: Enter Session Name**
+- User selects a session to import
+- Input field with slug validation (lowercase, numbers, underscores only)
+- Real-time validation with error messages
+- Conflict detection (checks for existing session names)
+- Import button disabled until valid name entered
+- Calls `sessions.importExternal({ sessionId, name, branch })`
+- Shows success state with checkmark
+- Auto-closes dialog after 1.5s
+
+**Validation rules**:
+- Session name required
+- Must match regex: `/^[a-z0-9_]+$/`
+- Must be unique within project/branch
+- External session must not already be imported
+
+**UI/UX**:
+- Progress indicator for each step
+- Back/Next navigation
+- Loading states during async operations
+- Error handling with user-friendly messages
+- Responsive layout with proper spacing
+
+---
+
 ## Components Reference
 
 ### Layout
@@ -187,16 +289,55 @@ App.tsx
 
 **`MessageBubble.tsx`** — User message only
 - Renders only `text`-type content blocks (filters others)
+- Detects and renders `CommandBadge` for slash commands (e.g., `/commit`, `/help`, `/meli.spec`)
 - Returns `null` if no non-empty text blocks (hides tool_result plumbing messages)
 - Right-aligned bubble with User avatar icon
+- Command badges rendered inline with orange background
+
+**`CommandBadge.tsx`** — Slash command badge component
+- Displays slash commands as styled badges
+- Orange background (`#D97757` - Claude brand color)
+- Monospace font (`ui-monospace, Menlo, Monaco`)
+- Inline display with proper padding
+- Used in both `MessageBubble` and `AssistantTurnBubble`
+- Auto-detects commands via regex: `/^\/[a-z][a-z0-9\.\-]*$/i`
 
 **`AssistantTurnBubble.tsx`** — Assistant turn (the primary display component)
 - Renders all `AssistantContentGroup[]` from a turn
 - **Thinking blocks**: `GroupedThinkingBubble` — collapsible, shows block count + word count estimate
 - **Tool blocks**: `GroupedToolsBubble` — collapsible, shows tool icons + names; expanded shows per-tool input (truncated 300 chars) + result (truncated 1000 chars) with error highlighting
+  - **Special tool rendering**:
+    - `AskUserQuestion` → `QuestionBlock` — interactive question card with multiple-choice options
+    - `ExitPlanMode` → `PlanBubble` — collapsible plan summary with file lists and permission requests
 - **Text blocks**: `MarkdownRenderer` — uses `react-markdown` + `remark-gfm` + `react-syntax-highlighter` (oneDark theme); has `MdErrorBoundary` that falls back to `PlainMarkdown` on render error
 - Token usage footer: `input↑ output↓ tokens`
 - Tool icon mapping: Bash=Terminal, Read/Write=FileText, Edit/MultiEdit=Edit, Glob/Grep=Search, WebSearch/WebFetch=Globe
+
+**`QuestionBlock.tsx`** — AskUserQuestion tool renderer
+- Displays question header with lucide `HelpCircle` icon in orange
+- Question text in bold with clear formatting
+- Multiple-choice options rendered as rounded badge buttons
+- Visual states:
+  - Default: gray background with hover effect
+  - Selected: green background with checkmark icon
+  - Active: orange border for current question
+- Collapsible detailed answers section (if tool_result available)
+- Shows selected answer highlighted in green badge
+- Compact layout with proper spacing
+
+**`PlanBubble.tsx`** — ExitPlanMode tool renderer
+- Plan title/header with collapsible toggle
+- Markdown rendering for plan description/details
+- Structured file list section:
+  - File paths with syntax highlighting
+  - Status indicators (✓ to create, ✏️ to modify, etc.)
+  - Grouped by operation type
+- Permission requests section (if plan includes permission prompts):
+  - Tool name (e.g., "Bash")
+  - Permission prompt text
+  - Visual styling with orange accent
+- Collapsible state with smooth transitions
+- Clear visual hierarchy with proper indentation
 
 **`ChatHeader.tsx`** — Session title (editable), status dot, model badge, project name
 - **Terminal toggle button** (lucide `Terminal` icon) — calls `toggleTerminalVisible()`; highlights orange when `terminalVisible === true`
@@ -245,7 +386,11 @@ App.tsx
 - Exit: `event:terminal:exit` → writes `[terminal closed]` message in red
 
 **`SessionControls.tsx`** — Controls bar for active sessions (simplified)
-- **Rollback** button: calls `git:stash`, shows "Stashed ✓" for 3s
+- **Rollback** button:
+  - Shows confirmation dialog before executing `git stash`
+  - Dialog explains that uncommitted changes will be stashed
+  - On confirm: calls `git:stash`, shows "Stashed ✓" for 3s
+  - On cancel: no action taken
 - **Resume** button: calls `resumeSession()` — creates PTY + writes `claude --resume <id>` after 500ms, sets `terminalVisible: true`
 - Short session ID (first 16 chars) shown right-aligned
 - Terminal close is now handled by `GlobalTerminalPanel`'s own × button

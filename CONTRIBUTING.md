@@ -60,10 +60,37 @@ npm run dev
 
 ## 🏗 Project Structure
 
-- `src/main/` - Electron main process (Node.js)
-- `src/preload/` - Preload scripts (IPC bridge)
-- `src/renderer/` - React frontend
-- `src/shared/` - Shared TypeScript types
+```
+src/
+├── main/              # Electron main process (Node.js)
+│   ├── services/      # Database, FileWatcher, TerminalService, AutoUpdater, etc.
+│   ├── ipc/           # IPC handlers for renderer communication
+│   ├── setup/         # Claude hooks setup
+│   └── index.ts       # Main process entry point
+├── preload/           # Preload scripts (IPC bridge via contextBridge)
+├── renderer/          # React frontend (browser sandbox)
+│   ├── src/
+│   │   ├── components/  # UI components
+│   │   │   ├── Analytics/  # Analytics dashboard
+│   │   │   ├── Chat/       # Message display components
+│   │   │   ├── Layout/     # Sidebar, panels, dialogs
+│   │   │   └── Session/    # Session controls, tabs
+│   │   ├── stores/      # Zustand state management
+│   │   └── utils/       # Helper functions
+└── shared/            # Shared TypeScript types (Session, ClaudeMessage, etc.)
+
+docs/                  # Detailed technical documentation
+├── context-renderer.md     # Frontend architecture
+├── context-services.md     # Backend services
+├── context-ipc.md          # IPC communication
+└── context-types.md        # TypeScript interfaces
+```
+
+**Key areas:**
+- **Services** (`src/main/services/`) - Core backend logic
+- **Components** (`src/renderer/src/components/`) - React UI components
+- **Stores** (`src/renderer/src/stores/`) - Zustand state management
+- **IPC handlers** (`src/main/ipc/`) - Bridge between main and renderer
 
 ## ✅ Code Style
 

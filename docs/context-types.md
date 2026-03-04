@@ -123,6 +123,43 @@ Note: `cacheReadTokens`/`cacheCreationTokens`/`toolCallCount`/`durationMs` are c
 ```
 Defined in `src/renderer/src/stores/sessionStore.ts` and used for real-time session activity tracking. Auto-clears after 10 seconds via `event:sessionActivity` listener in App.tsx.
 
+### `DailyMetric`
+```typescript
+{
+  date: string                    // YYYY-MM-DD format
+  totalCost: number               // total cost in USD for this day
+  totalTokens: number             // total input + output tokens
+  sessionCount: number            // number of sessions active on this day
+  inputTokens: number             // total input tokens
+  outputTokens: number            // total output tokens
+  cacheWriteTokens?: number       // cache creation tokens (optional)
+  cacheReadTokens?: number        // cache read tokens (optional)
+}
+```
+Used by `AnalyticsPanel` for daily cost trends, project comparison, and session distribution charts. Returned by `sessions.getDailyMetrics(startDate, endDate, projectFilter?)`.
+
+### `UpdateInfo`
+```typescript
+{
+  version: string                 // semantic version (e.g., '0.2.0')
+  releaseNotes: string            // markdown release notes from GitHub
+  releaseDate: string             // ISO timestamp
+  files: UpdateFileInfo[]         // array of downloadable files
+}
+```
+Represents available update information from GitHub releases. Used by `AutoUpdater` service.
+
+### `UpdateProgress`
+```typescript
+{
+  percent: number                 // download progress percentage (0-100)
+  bytesPerSecond: number          // download speed in bytes/sec
+  transferred: number             // bytes downloaded so far
+  total: number                   // total file size in bytes
+}
+```
+Used by `AutoUpdater` to emit download progress events. Sent via `event:update:progress` to renderer for UI progress bars.
+
 ---
 
 ## IPC Channel Types (`IpcChannels`)
@@ -142,6 +179,9 @@ interface IpcChannels {
   'sessions:removeTag':   (id, tag) => void
   'sessions:launchNew':   (opts: { projectPath, branch, name }) => { success; launchId?; error? }
   'sessions:resetActive': () => void   // reset all active sessions to completed on app start
+  'sessions:scanExternal': (projectPath, branch?) => Session[]  // scan for external .jsonl not in DB
+  'sessions:importExternal': (opts: { sessionId, name, branch? }) => { success; error? }
+  'sessions:getDailyMetrics': (startDate, endDate, projectFilter?) => DailyMetric[]
   'projects:list':        () => Project[]
   'settings:get':         () => AppSettings
   'settings:update':      (partial) => void
@@ -159,5 +199,13 @@ interface IpcChannels {
   'event:terminalLinked': { launchId: string; sessionId: string }
   'event:sessionActivity': { sessionId: string; type: string; detail?: string; timestamp: string }
   'event:terminal:exit':  { sessionId: string }
+  'event:update:available': { version: string; releaseNotes: string }
+  'event:update:not-available': null
+  'event:update:progress': UpdateProgress
+  'event:update:downloaded': { version: string }
+  'event:update:error': { error: string }
+  'updater:check':        () => { hasUpdate: boolean; version?: string; releaseNotes?: string }
+  'updater:download':     () => void
+  'updater:install':      () => void
 }
 ```

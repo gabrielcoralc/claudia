@@ -14,11 +14,11 @@ Detailed per-module documentation lives in `docs/`. Read these instead of this f
 
 | File | Covers |
 |---|---|
-| [`docs/context-services.md`](docs/context-services.md) | Database, SessionParser, FileWatcher, HooksServer, TerminalService |
+| [`docs/context-services.md`](docs/context-services.md) | Database, SessionParser, FileWatcher, HooksServer, TerminalService, **AutoUpdater** |
 | [`docs/context-main-process.md`](docs/context-main-process.md) | Entry point, IPC handlers, claudeHooks setup |
 | [`docs/context-ipc.md`](docs/context-ipc.md) | Preload bridge, full `window.api` surface, all IPC event channels |
-| [`docs/context-renderer.md`](docs/context-renderer.md) | Zustand store, messageGrouper, all React components |
-| [`docs/context-types.md`](docs/context-types.md) | All shared TypeScript interfaces |
+| [`docs/context-renderer.md`](docs/context-renderer.md) | Zustand store, messageGrouper, all React components including **Analytics**, **ImportSessionDialog**, **QuestionBlock**, **PlanBubble**, **CommandBadge** |
+| [`docs/context-types.md`](docs/context-types.md) | All shared TypeScript interfaces including **SessionActivity**, **DailyMetric**, **UpdateInfo** |
 | [`docs/claude-code-session-format.md`](docs/claude-code-session-format.md) | Claude Code JSONL transcript format reference |
 
 ---
@@ -114,6 +114,32 @@ User clicks Resume in SessionControls
   → terminalVisible = true
 ```
 
+## Data Flow: Import External Session
+
+```
+User clicks Import Session in WelcomeScreen
+  → ImportSessionDialog modal opens
+  → Step 1: Load projects via projects.list()
+  → User selects project
+  → Step 2: Load branches via git:branches(projectPath)
+  → User selects branch filter ("all" or specific branch)
+  → Step 3: Scan external sessions
+     → window.api.sessions.scanExternal(projectPath, branch?)
+     → SessionParser scans ~/.claude/projects/<encoded-path>/*.jsonl
+     → Filters out sessions already in DB (source='app')
+     → Returns array of external sessions with metadata
+     → UI displays sessions with: title, date, message count, cost, branch
+  → User selects session to import
+  → Step 4: Enter session name (slug validation)
+  → User clicks Import
+     → window.api.sessions.importExternal({ sessionId, name, branch })
+     → ipc/handlers.ts: marks session as source='app' in DB
+     → FileWatcher: starts watching .jsonl file
+     → win.webContents.send('event:sessionUpdated', session)
+     → useSessionStore.updateSession() → session appears in sidebar
+     → Dialog shows success, auto-closes after 1.5s
+```
+
 ---
 
 ## Main Process Modules (`src/main/`)
@@ -122,13 +148,14 @@ User clicks Resume in SessionControls
 
 | File | Responsibility |
 |---|---|
-| `index.ts` | Window creation, startup sequence (IPC → HooksServer → FileWatcher), before-quit cleanup |
+| `index.ts` | Window creation, startup sequence (IPC → HooksServer → FileWatcher → AutoUpdater), before-quit cleanup |
 | `services/Database.ts` | SQLite (`claudia.db`): `sessionDb`, `messageDb`, `projectDb`, `settingsDb` namespaces |
-| `services/SessionParser.ts` | Parses JSONL transcripts → `ClaudeMessage[]`; `scanClaudeProjects()`, `decodeProjectPath()` |
-| `services/FileWatcher.ts` | chokidar watcher (no startup import); `pendingLaunches` map; tracks `lastLineCount` per file |
+| `services/SessionParser.ts` | Parses JSONL transcripts → `ClaudeMessage[]`; `scanClaudeProjects()`, `decodeProjectPath()`, incremental parsing |
+| `services/FileWatcher.ts` | chokidar watcher (no startup import); `pendingLaunches` map; tracks `lastLineCount` per file; external session scanning |
 | `services/HooksServer.ts` | HTTP server on `:27182`; handles `SessionStart` (with retry), `Stop`, `Notification` hooks |
-| `services/TerminalService.ts` | node-pty management (lazy-loaded); git CLI helpers (`getLastCommitDiff`, `stashChanges`, etc.) |
-| `ipc/handlers.ts` | All `ipcMain.handle()` registrations; `claude:launch` subprocess; `git:reviewWithClaude` one-shot |
+| `services/TerminalService.ts` | node-pty management (lazy-loaded); git CLI helpers (`getLastCommitDiff`, `stashChanges`, etc.); multiple concurrent terminals |
+| `services/AutoUpdater.ts` | electron-updater integration; checks GitHub releases every 4h; downloads + installs updates; progress tracking |
+| `ipc/handlers.ts` | All `ipcMain.handle()` registrations; `claude:launch` subprocess; `git:reviewWithClaude` one-shot; import/analytics APIs |
 | `setup/claudeHooks.ts` | Writes `~/.claude/claudia-bridge.sh` + installs it in `~/.claude/settings.json` |
 
 ---
@@ -147,7 +174,7 @@ window.api.sessions.*  · projects.*  · settings.*  · hooks.*
 ```
 
 **Push events** (main → renderer via `window.api.on`):
-`event:newSession` · `event:sessionUpdated` · `event:sessionStarted` · `event:sessionReplaced` · `event:terminalLinked` · `event:messageAdded` · `event:sessionActivity` · `event:notification` · `event:claudeStreamEvent` · `event:claudeStreamError` · `event:claudeProcessExit` · `event:terminal:data` · `event:terminal:exit`
+`event:newSession` · `event:sessionUpdated` · `event:sessionStarted` · `event:sessionReplaced` · `event:terminalLinked` · `event:messageAdded` · `event:sessionActivity` · `event:notification` · `event:claudeStreamEvent` · `event:claudeStreamError` · `event:claudeProcessExit` · `event:terminal:data` · `event:terminal:exit` · `event:update:available` · `event:update:not-available` · `event:update:progress` · `event:update:downloaded` · `event:update:error`
 
 ---
 
@@ -205,12 +232,18 @@ App.tsx  [event listeners: newSession, sessionUpdated, sessionStarted,
 `*` = active sessions only
 
 **Key components**:
-- `AssistantTurnBubble` — renders grouped thinking/tool/text blocks with `react-markdown` + syntax highlighting
-- `MessageBubble` — user messages only (text blocks, right-aligned)
-- `SessionControls` — Rollback (`git stash`) + Resume (opens/resumes terminal)
+- `AssistantTurnBubble` — renders grouped thinking/tool/text blocks with `react-markdown` + syntax highlighting; now includes `QuestionBlock`, `PlanBubble`, `CommandBadge`
+- `QuestionBlock` — renders `AskUserQuestion` tool calls as interactive question cards with multiple-choice UI
+- `PlanBubble` — renders `ExitPlanMode` output as collapsible plan summaries with file lists
+- `CommandBadge` — displays slash commands (e.g., `/commit`, `/help`) as orange badges
+- `MessageBubble` — user messages only (text blocks, right-aligned); detects and renders command badges
+- `SessionControls` — Rollback (`git stash` with confirmation) + Resume (opens/resumes terminal)
 - `ChatHeader` — session title, status, model badge + **terminal toggle button**
 - `GlobalTerminalPanel` — persistent right-side panel driven by `terminalVisible`; persists across session switches
 - `NewSessionDialog` — repo picker + branch selector + **session name field** (slug); calls `sessions.launchNew` directly
+- `ImportSessionDialog` — 4-step wizard for importing external sessions with project/branch filtering and validation
+- `AnalyticsPanel` — full analytics dashboard with daily metrics, cost trends, project comparison via Recharts
+- `AnalyticsFiltersBar` — date range picker, project filter, metric selection for analytics
 - `CodeTab` — per-file diff review with Accept/Reject/AI-review + general review dropdown
 - `TerminalPane` — xterm.js with FitAddon + ResizeObserver
 

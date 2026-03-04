@@ -212,5 +212,100 @@ Internal: `terminals: Map<sessionId, { proc: IPty, cwd: string }>`
 - **`getBranches(projectPath)`** → `string[]`  
   `git branch --list` — strips `* ` prefix marker
 
-- **`findGitRepos(baseDir, maxDepth=3)`** → `string[]`  
+- **`findGitRepos(baseDir, maxDepth=3)`** → `string[]`
   `find "<dir>" -maxdepth <n> -name ".git" -type d | head -100` — strips `/.git` suffix. Resolves `~` to `$HOME`.
+
+---
+
+## `AutoUpdater.ts`
+
+Integrates `electron-updater` to handle automatic application updates from GitHub releases.
+
+### Initialization
+
+**`initAutoUpdater(win)`** — Initializes the updater system:
+- Sets `autoUpdater.autoDownload = false` (manual download control)
+- Configures update check interval (every 4 hours)
+- Registers event listeners for update lifecycle
+- Performs initial update check on app start
+- Sends IPC events to renderer for UI updates
+
+### Update Flow
+
+```
+1. App start → initAutoUpdater(win) → checkForUpdates()
+2. GitHub releases API check → compare versions
+3. If new version found:
+   → emit 'event:update:available' { version, releaseNotes }
+   → renderer shows notification with version info
+4. User clicks "Download":
+   → window.api.updater.download() → autoUpdater.downloadUpdate()
+   → emit 'event:update:progress' { percent, bytesPerSecond, transferred, total }
+   → renderer shows progress bar
+5. Download complete:
+   → emit 'event:update:downloaded' { version }
+   → renderer shows "Install" button
+6. User clicks "Install":
+   → window.api.updater.install() → autoUpdater.quitAndInstall()
+   → app quits and relaunches with new version
+```
+
+### Exported API
+
+- **`initAutoUpdater(win)`** — Sets up auto-updater with event listeners
+- **`checkForUpdates()`** → `Promise<{ hasUpdate: boolean; version?: string; releaseNotes?: string }>`
+  Manually checks for updates. Returns update availability and details.
+- **`downloadUpdate()`** → `Promise<void>`
+  Starts downloading the update in background. Emits progress events.
+- **`quitAndInstall()`** → `void`
+  Quits the app immediately and installs the downloaded update.
+
+### Events Emitted (main → renderer)
+
+| Event | Payload | When |
+|---|---|---|
+| `event:update:available` | `{ version: string; releaseNotes: string }` | New version found on GitHub |
+| `event:update:not-available` | `null` | No update available (already latest) |
+| `event:update:progress` | `{ percent: number; bytesPerSecond: number; transferred: number; total: number }` | Download progress update (fired multiple times) |
+| `event:update:downloaded` | `{ version: string }` | Download complete, ready to install |
+| `event:update:error` | `{ error: string }` | Update check or download failed |
+
+### Configuration
+
+Update settings are configured in `package.json`:
+
+```json
+{
+  "build": {
+    "publish": [{
+      "provider": "github",
+      "owner": "gabrielcoralc",
+      "repo": "claudia"
+    }]
+  }
+}
+```
+
+### Update Policy
+
+- **Automatic checks**: Every 4 hours while app is running
+- **Manual download**: User must explicitly click "Download"
+- **Manual install**: User must explicitly click "Install" to restart
+- **No force updates**: User can dismiss update notifications
+- **Silent failures**: Update errors don't block app functionality
+
+### Error Handling
+
+All updater errors are caught and emitted as `event:update:error`:
+- Network failures (no internet, GitHub down)
+- Invalid release format
+- Download interruptions
+- Signature verification failures (future, when code-signed)
+
+### Development Notes
+
+- Auto-updater only works in production builds (packaged apps)
+- Development mode (`npm run dev`) skips updater initialization
+- Updates are only checked for published GitHub releases
+- Delta updates not supported (full app download each time)
+- macOS Gatekeeper may block updates from unsigned builds (user must approve)
