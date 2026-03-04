@@ -341,13 +341,19 @@ export class PricingService {
       const exactMatch = this.pricingData.models[modelId]
       if (exactMatch) return exactMatch
 
-      // Try partial match
+      // Try partial match — prefer the longest matching key (most specific)
       const modelLower = modelId.toLowerCase()
+      let bestMatch: ModelPricing | null = null
+      let bestMatchLen = 0
       for (const [key, pricing] of Object.entries(this.pricingData.models)) {
         if (modelLower.includes(key) || key.includes(modelLower)) {
-          return pricing
+          if (key.length > bestMatchLen) {
+            bestMatch = pricing
+            bestMatchLen = key.length
+          }
         }
       }
+      if (bestMatch) return bestMatch
 
       // Fall back to model family
       if (modelLower.includes('opus')) {
