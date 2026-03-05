@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Check, Clock, Copy, DollarSign, FolderOpen, GitBranch, Layers, MessageSquare, Zap } from 'lucide-react'
+import { Check, Clock, Copy, DollarSign, FolderOpen, GitBranch, MessageSquare, Zap } from 'lucide-react'
 import { useSessionStore } from '../../stores/sessionStore'
 import type { Session } from '../../../../shared/types'
 
@@ -28,18 +28,6 @@ function formatCost(usd?: number): string {
   if (usd < 0.001) return '<$0.001'
   if (usd < 0.01) return `$${usd.toFixed(3)}`
   return `$${usd.toFixed(2)}`
-}
-
-function SubsessionBadge({ sessionId }: { sessionId: string }): React.JSX.Element | null {
-  const { subsessions } = useSessionStore()
-  const count = (subsessions[sessionId] ?? []).length
-  if (count === 0) return null
-  return (
-    <span className="flex items-center gap-1 text-xs text-claude-muted">
-      <Layers size={10} />
-      {count}
-    </span>
-  )
 }
 
 export default function SessionItem({ session, isSelected, onSelect }: Props): React.JSX.Element {
@@ -119,8 +107,6 @@ export default function SessionItem({ session, isSelected, onSelect }: Props): R
             live
           </span>
         )}
-
-        <SubsessionBadge sessionId={session.id} />
       </div>
 
       <div className="flex items-center gap-1.5 pl-3.5">

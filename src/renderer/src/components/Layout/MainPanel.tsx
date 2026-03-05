@@ -10,7 +10,7 @@ import SessionControls from '../Terminal/SessionControls'
 import ChatHeader from '../Chat/ChatHeader'
 import NewSessionDialog from './NewSessionDialog'
 import AnalyticsPanel from '../Analytics/AnalyticsPanel'
-import { Code2, ScrollText, Info, Zap, Plus, ChevronRight, Square, Layers, Play, Loader } from 'lucide-react'
+import { Code2, ScrollText, Info, Zap, Plus, ChevronRight, Square, Layers, Play, Loader, Trash2 } from 'lucide-react'
 import type { Session } from '../../../../shared/types'
 
 function GlobalTerminalPanel(): React.JSX.Element | null {
@@ -113,10 +113,12 @@ function SubsessionsTab({ session }: { session: Session }): React.JSX.Element {
     selectSubsession,
     clearActiveSubsession,
     switchToSession,
-    activeTerminals
+    activeTerminals,
+    deleteSession
   } = useSessionStore()
   const subs = subsessions[session.id] ?? []
   const [switchingId, setSwitchingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => {
     loadSubsessions(session.id)
@@ -132,6 +134,21 @@ function SubsessionsTab({ session }: { session: Session }): React.JSX.Element {
       await switchToSession(targetId, projectPath, branch, parentId)
     } finally {
       setSwitchingId(null)
+    }
+  }
+
+  const handleDeleteSub = async (sub: Session) => {
+    const confirmed = window.confirm(
+      `Delete subsession "${sub.title || sub.id.slice(0, 8)}"?\n\nThis will remove it from the database.`
+    )
+    if (!confirmed) return
+    setDeletingId(sub.id)
+    try {
+      if (activeSubsessionId === sub.id) clearActiveSubsession()
+      await deleteSession(sub.id)
+      await loadSubsessions(session.id)
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -239,6 +256,16 @@ function SubsessionsTab({ session }: { session: Session }): React.JSX.Element {
                 >
                   {switchingId === sub.id ? <Loader size={11} className="animate-spin" /> : <Play size={11} />}
                   {hasAnyTerminal ? 'Switch' : 'Resume'}
+                </button>
+              )}
+              {!subHasTerminal && sub.status !== 'active' && (
+                <button
+                  onClick={() => handleDeleteSub(sub)}
+                  disabled={deletingId === sub.id}
+                  title="Delete subsession"
+                  className="flex items-center p-1 rounded-md text-xs text-red-400 hover:text-red-300 hover:bg-red-950/20 transition-colors disabled:opacity-50 shrink-0"
+                >
+                  {deletingId === sub.id ? <Loader size={11} className="animate-spin" /> : <Trash2 size={11} />}
                 </button>
               )}
             </div>
