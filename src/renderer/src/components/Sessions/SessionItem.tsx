@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { Check, Clock, Copy, DollarSign, FolderOpen, GitBranch, MessageSquare, Zap } from 'lucide-react'
+import { Check, Clock, Copy, DollarSign, FolderOpen, GitBranch, Layers, MessageSquare, Zap } from 'lucide-react'
+import { useSessionStore } from '../../stores/sessionStore'
 import type { Session } from '../../../../shared/types'
 
 interface Props {
@@ -29,12 +30,27 @@ function formatCost(usd?: number): string {
   return `$${usd.toFixed(2)}`
 }
 
+function SubsessionBadge({ sessionId }: { sessionId: string }): React.JSX.Element | null {
+  const { subsessions } = useSessionStore()
+  const count = (subsessions[sessionId] ?? []).length
+  if (count === 0) return null
+  return (
+    <span className="flex items-center gap-1 text-xs text-claude-muted">
+      <Layers size={10} />
+      {count}
+    </span>
+  )
+}
+
 export default function SessionItem({ session, isSelected, onSelect }: Props): React.JSX.Element {
-  const statusColor = {
-    active: 'bg-green-500',
-    completed: 'bg-claude-muted',
-    paused: 'bg-yellow-500'
-  }[session.status]
+  const { subsessions } = useSessionStore()
+  const subs = subsessions[session.id] ?? []
+  const hasActiveSubsession = subs.some(s => s.status === 'active')
+
+  const statusColor =
+    session.status === 'active' || hasActiveSubsession
+      ? 'bg-green-500'
+      : { active: 'bg-green-500', completed: 'bg-claude-muted', paused: 'bg-yellow-500' }[session.status]
 
   const hasRealTitle = session.title && session.title !== 'New Session'
   const title = hasRealTitle ? session.title! : null
@@ -97,12 +113,14 @@ export default function SessionItem({ session, isSelected, onSelect }: Props): R
           </span>
         )}
 
-        {session.status === 'active' && (
+        {(session.status === 'active' || hasActiveSubsession) && (
           <span className="flex items-center gap-1 text-xs text-green-400">
             <Zap size={10} />
             live
           </span>
         )}
+
+        <SubsessionBadge sessionId={session.id} />
       </div>
 
       <div className="flex items-center gap-1.5 pl-3.5">

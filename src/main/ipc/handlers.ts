@@ -31,7 +31,7 @@ import { spawn, ChildProcess, exec } from 'child_process'
 import { promisify } from 'util'
 import { basename } from 'path'
 import which from 'which'
-import { registerPendingLaunch } from '../services/FileWatcher'
+import { registerPendingLaunch, registerPendingResume } from '../services/FileWatcher'
 import { sendToRenderer, getMainWindow } from '../services/WindowManager'
 import fs from 'fs'
 import {
@@ -83,6 +83,10 @@ export function registerIpcHandlers(): void {
     console.log('[IPC] sessions:resetActive — marking stale active sessions as completed and killing orphan terminals')
     sessionDb.resetActiveSessions()
     killAllTerminals()
+  })
+
+  ipcMain.handle('sessions:registerResume', (_event, projectPath: string) => {
+    registerPendingResume(projectPath)
   })
 
   // Reviews
@@ -161,6 +165,8 @@ export function registerIpcHandlers(): void {
       return { success: false, error: String(err) }
     }
   })
+
+  ipcMain.handle('sessions:getSubsessions', (_e, parentId: string) => sessionDb.getSubsessions(parentId))
 
   ipcMain.handle('sessions:get', (_e, id: string) => sessionDb.getById(id))
 

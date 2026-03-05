@@ -9,9 +9,16 @@ interface Props {
   onResume: () => Promise<void>
   onRollback: () => Promise<void>
   onDelete: () => Promise<void>
+  hasActiveSubsession?: boolean
 }
 
-export default function SessionControls({ session, onResume, onRollback, onDelete }: Props): React.JSX.Element {
+export default function SessionControls({
+  session,
+  onResume,
+  onRollback,
+  onDelete,
+  hasActiveSubsession
+}: Props): React.JSX.Element {
   const [rolling, setRolling] = useState(false)
   const [resuming, setResuming] = useState(false)
   const [rollbackMsg, setRollbackMsg] = useState('')
@@ -132,6 +139,14 @@ export default function SessionControls({ session, onResume, onRollback, onDelet
         >
           <Lightbulb size={13} />
           Active
+        </span>
+      ) : hasActiveSubsession ? (
+        <span
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-green-600/20 text-green-400 cursor-default"
+          title="A subsession is currently active"
+        >
+          <Lightbulb size={13} />
+          Active Subsession
         </span>
       ) : (
         <button

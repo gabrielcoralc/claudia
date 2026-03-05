@@ -18,7 +18,9 @@ import {
   Bot,
   Brain,
   FileText,
-  HelpCircle
+  HelpCircle,
+  ArrowLeft,
+  Layers
 } from 'lucide-react'
 
 type FilterType = 'user' | 'claude' | 'thinking' | 'tools' | 'files' | 'questions' | 'tool_results'
@@ -225,16 +227,28 @@ function FilterDropdown({
 }
 
 function TerminalBubble({ sessionId }: { sessionId: string }): React.JSX.Element | null {
-  const { activeTerminals, hiddenTerminals, toggleTerminalVisible } = useSessionStore()
-  const hasTerminal = activeTerminals.has(sessionId)
-  const isHidden = hiddenTerminals.has(sessionId)
+  const { activeTerminals, hiddenTerminals, toggleTerminalVisible, subsessions, activeSubsessionId } = useSessionStore()
+
+  // Resolve effective terminal ID: terminal may be keyed under a subsession ID
+  let effectiveId = sessionId
+  if (!activeTerminals.has(sessionId)) {
+    const subs = subsessions[sessionId] ?? []
+    const subWithTerminal = subs.find(s => activeTerminals.has(s.id))
+    if (subWithTerminal) effectiveId = subWithTerminal.id
+  }
+  if (activeSubsessionId && activeTerminals.has(activeSubsessionId)) {
+    effectiveId = activeSubsessionId
+  }
+
+  const hasTerminal = activeTerminals.has(effectiveId)
+  const isHidden = hiddenTerminals.has(effectiveId)
 
   if (!hasTerminal || !isHidden) return null
 
   return (
     <div className="sticky top-0 z-30 flex justify-end mb-2">
       <button
-        onClick={() => toggleTerminalVisible(sessionId)}
+        onClick={() => toggleTerminalVisible(effectiveId)}
         className="flex items-center gap-2 px-3 py-2 bg-claude-panel border-2 rounded-lg shadow-lg hover:brightness-125 transition-all text-claude-text animate-terminal-glow"
         title="Show terminal"
       >
@@ -242,6 +256,27 @@ function TerminalBubble({ sessionId }: { sessionId: string }): React.JSX.Element
         <span className="text-xs font-medium">Terminal</span>
         <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
         <ChevronLeft size={14} className="text-claude-muted" />
+      </button>
+    </div>
+  )
+}
+
+function SubsessionBanner({ session }: { session: Session }): React.JSX.Element | null {
+  const { clearActiveSubsession } = useSessionStore()
+  if (!session.parentSessionId) return null
+
+  return (
+    <div className="shrink-0 flex items-center gap-2 px-4 py-2 bg-claude-hover/50 border-b border-claude-border">
+      <Layers size={12} className="text-claude-orange shrink-0" />
+      <span className="text-xs text-claude-muted flex-1">
+        Viewing <span className="text-claude-text font-medium">{session.title ?? session.id.slice(0, 8)}</span>
+      </span>
+      <button
+        onClick={() => clearActiveSubsession()}
+        className="flex items-center gap-1 text-xs text-claude-muted hover:text-claude-text transition-colors"
+      >
+        <ArrowLeft size={12} />
+        Back to parent
       </button>
     </div>
   )
@@ -296,6 +331,7 @@ export default function ChatTab({ session }: Props): React.JSX.Element {
 
   return (
     <div className="flex flex-col h-full">
+      <SubsessionBanner session={session} />
       <div className="shrink-0 px-4 py-2 border-b border-claude-border space-y-2">
         <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-claude-hover">
           <Search size={13} className="text-claude-muted shrink-0" />

@@ -126,10 +126,11 @@ export default function ImportSessionDialog({ onClose, onImport }: Props): React
 
       // 4. Validar ramas y agregar metadata
       const validated: SessionWithValidation[] = filtered.map(session => {
+        const base = { ...session, tags: [] as string[], parentSessionId: undefined } as unknown as Session
         // Caso 1: Sesión sin rama
         if (!session.branch) {
           return {
-            ...session,
+            ...base,
             isValid: false,
             invalidReason: 'No branch information available for this session'
           }
@@ -138,7 +139,7 @@ export default function ImportSessionDialog({ onClose, onImport }: Props): React
         // Caso 2: Rama no existe en proyecto
         if (!availableBranches.includes(session.branch)) {
           return {
-            ...session,
+            ...base,
             isValid: false,
             invalidReason: `Branch '${session.branch}' not found in this repository`
           }
@@ -146,7 +147,7 @@ export default function ImportSessionDialog({ onClose, onImport }: Props): React
 
         // Caso 3: Rama válida
         return {
-          ...session,
+          ...base,
           isValid: true
         }
       })

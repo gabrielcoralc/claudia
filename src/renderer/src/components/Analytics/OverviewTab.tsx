@@ -103,20 +103,16 @@ export default function OverviewTab({ filters }: Props): React.JSX.Element {
           <h3 className="text-sm font-semibold text-claude-text mb-4">Daily Cost Trend</h3>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={dailyMetrics}>
-              <XAxis 
-                dataKey="date" 
+              <XAxis
+                dataKey="date"
                 stroke="#8E8E93"
                 style={{ fontSize: '11px' }}
-                tickFormatter={(value) => {
+                tickFormatter={value => {
                   const date = new Date(value)
                   return `${date.getMonth() + 1}/${date.getDate()}`
                 }}
               />
-              <YAxis 
-                stroke="#8E8E93"
-                style={{ fontSize: '11px' }}
-                tickFormatter={(value) => `$${value.toFixed(2)}`}
-              />
+              <YAxis stroke="#8E8E93" style={{ fontSize: '11px' }} tickFormatter={value => `$${value.toFixed(2)}`} />
               <Tooltip
                 contentStyle={{
                   backgroundColor: '#1C1C1E',
@@ -125,15 +121,9 @@ export default function OverviewTab({ filters }: Props): React.JSX.Element {
                   fontSize: '12px'
                 }}
                 labelStyle={{ color: '#F5F5F5' }}
-                formatter={(value: number) => [`$${value.toFixed(4)}`, 'Cost']}
+                formatter={((value: number) => [`$${value.toFixed(4)}`, 'Cost']) as never}
               />
-              <Line 
-                type="monotone" 
-                dataKey="cost" 
-                stroke="#D97757" 
-                strokeWidth={2}
-                dot={{ fill: '#D97757', r: 3 }}
-              />
+              <Line type="monotone" dataKey="cost" stroke="#D97757" strokeWidth={2} dot={{ fill: '#D97757', r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -147,26 +137,59 @@ export default function OverviewTab({ filters }: Props): React.JSX.Element {
             <AreaChart data={dailyMetrics}>
               <defs>
                 <linearGradient id="colorInput" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
+                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1} />
                 </linearGradient>
                 <linearGradient id="colorOutput" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.1}/>
+                  <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.8} />
+                  <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.1} />
                 </linearGradient>
               </defs>
-              <XAxis dataKey="date" stroke="#8E8E93" style={{ fontSize: '11px' }}
-                tickFormatter={(v) => { const d = new Date(v); return `${d.getMonth()+1}/${d.getDate()}` }} />
-              <YAxis stroke="#8E8E93" style={{ fontSize: '11px' }} tickFormatter={(v) => formatNumber(v)} />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#1C1C1E', border: '1px solid #2C2C2E', borderRadius: '8px', fontSize: '12px' }}
-                labelStyle={{ color: '#F5F5F5' }}
-                formatter={(value: number, name: string) => [formatNumber(value), name === 'inputTokens' ? 'Input' : 'Output']}
+              <XAxis
+                dataKey="date"
+                stroke="#8E8E93"
+                style={{ fontSize: '11px' }}
+                tickFormatter={v => {
+                  const d = new Date(v)
+                  return `${d.getMonth() + 1}/${d.getDate()}`
+                }}
               />
-              <Legend wrapperStyle={{ fontSize: '12px' }}
-                formatter={(value) => value === 'inputTokens' ? 'Input Tokens' : 'Output Tokens'} />
-              <Area type="monotone" dataKey="inputTokens" stackId="1" stroke="#3b82f6" fill="url(#colorInput)" strokeWidth={2} />
-              <Area type="monotone" dataKey="outputTokens" stackId="1" stroke="#f59e0b" fill="url(#colorOutput)" strokeWidth={2} />
+              <YAxis stroke="#8E8E93" style={{ fontSize: '11px' }} tickFormatter={v => formatNumber(v)} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#1C1C1E',
+                  border: '1px solid #2C2C2E',
+                  borderRadius: '8px',
+                  fontSize: '12px'
+                }}
+                labelStyle={{ color: '#F5F5F5' }}
+                formatter={
+                  ((value: number, name: string) => [
+                    formatNumber(value),
+                    name === 'inputTokens' ? 'Input' : 'Output'
+                  ]) as never
+                }
+              />
+              <Legend
+                wrapperStyle={{ fontSize: '12px' }}
+                formatter={value => (value === 'inputTokens' ? 'Input Tokens' : 'Output Tokens')}
+              />
+              <Area
+                type="monotone"
+                dataKey="inputTokens"
+                stackId="1"
+                stroke="#3b82f6"
+                fill="url(#colorInput)"
+                strokeWidth={2}
+              />
+              <Area
+                type="monotone"
+                dataKey="outputTokens"
+                stackId="1"
+                stroke="#f59e0b"
+                fill="url(#colorOutput)"
+                strokeWidth={2}
+              />
             </AreaChart>
           </ResponsiveContainer>
         </div>

@@ -1,4 +1,16 @@
-import type { Session, ClaudeMessage, AppSettings, Project, SessionCostSummary } from '../../../shared/types'
+import type {
+  Session,
+  ClaudeMessage,
+  AppSettings,
+  Project,
+  SessionCostSummary,
+  AnalyticsFilters,
+  AnalyticsMetrics,
+  SessionMetrics,
+  ProjectMetrics,
+  DailyMetrics,
+  EntityDailyMetrics
+} from '../../../shared/types'
 
 declare global {
   interface Window {
@@ -43,6 +55,15 @@ declare global {
           session?: Session
           error?: string
         }>
+        getSubsessions: (parentId: string) => Promise<Session[]>
+        registerResume: (projectPath: string) => Promise<void>
+        updateBranch: (
+          id: string,
+          projectPath: string,
+          branchName?: string
+        ) => Promise<{ success: boolean; branch?: string; error?: string }>
+        updateStatus: (id: string, status: 'active' | 'completed' | 'paused') => Promise<void>
+        resetActive: () => Promise<void>
       }
       projects: {
         list: () => Promise<Project[]>
@@ -72,6 +93,19 @@ declare global {
         kill: (sessionId: string) => Promise<void>
         isRunning: (sessionId: string) => Promise<boolean>
       }
+      reviews: {
+        save: (
+          sessionId: string,
+          reviewType: string,
+          scope: string,
+          filePath: string | null,
+          content: string
+        ) => Promise<void>
+        getBySession: (
+          sessionId: string
+        ) => Promise<Array<{ reviewType: string; scope: string; filePath: string | null; content: string }>>
+        deleteByFile: (sessionId: string, filePath: string) => Promise<void>
+      }
       git: {
         lastCommitDiff: (projectPath: string) => Promise<{
           files: Array<{ path: string; additions: number; deletions: number }>
@@ -79,17 +113,25 @@ declare global {
         }>
         fileDiff: (projectPath: string, filePath: string) => Promise<string>
         revertFile: (projectPath: string, filePath: string) => Promise<{ success: boolean; error?: string }>
+        stageFile: (projectPath: string, filePath: string) => Promise<{ success: boolean; error?: string }>
         stash: (projectPath: string) => Promise<{ success: boolean; error?: string }>
         branches: (projectPath: string) => Promise<string[]>
         findRepos: (baseDir: string) => Promise<string[]>
         reviewWithClaude: (opts: {
-          sessionId: string
           projectPath: string
           prompt: string
         }) => Promise<{ success: boolean; response?: string; error?: string }>
       }
       dialog: {
         openFolder: (defaultPath?: string) => Promise<string | null>
+      }
+      analytics: {
+        getGlobalMetrics: (filters: AnalyticsFilters) => Promise<AnalyticsMetrics>
+        getTopSessions: (limit: number, filters: AnalyticsFilters) => Promise<SessionMetrics[]>
+        getProjectMetrics: (filters: AnalyticsFilters) => Promise<ProjectMetrics[]>
+        getDailyMetrics: (filters: AnalyticsFilters) => Promise<DailyMetrics[]>
+        getSessionDailyBreakdown: (filters: AnalyticsFilters) => Promise<EntityDailyMetrics[]>
+        getProjectDailyBreakdown: (filters: AnalyticsFilters) => Promise<EntityDailyMetrics[]>
       }
       on: (channel: string, callback: (...args: unknown[]) => void) => () => void
       off: (channel: string) => void

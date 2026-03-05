@@ -59,7 +59,9 @@ const api = {
       success: boolean
       session?: Session
       error?: string
-    }> => ipcRenderer.invoke('sessions:importExternal', sessionId, title)
+    }> => ipcRenderer.invoke('sessions:importExternal', sessionId, title),
+    getSubsessions: (parentId: string): Promise<Session[]> => ipcRenderer.invoke('sessions:getSubsessions', parentId),
+    registerResume: (projectPath: string): Promise<void> => ipcRenderer.invoke('sessions:registerResume', projectPath)
   },
 
   projects: {

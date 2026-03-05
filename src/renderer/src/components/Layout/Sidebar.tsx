@@ -5,7 +5,7 @@ import SessionItem from '../Sessions/SessionItem'
 import SettingsPanel from '../Settings/SettingsPanel'
 
 export default function Sidebar(): React.JSX.Element {
-  const { sessions, projects, sidebarView, setSidebarView, selectedSessionId, selectSession } =
+  const { sessions, projects, sidebarView, setSidebarView, selectedSessionId, selectSession, subsessions } =
     useSessionStore()
   const [search, setSearch] = useState('')
   const [showSettings, setShowSettings] = useState(false)
@@ -15,21 +15,20 @@ export default function Sidebar(): React.JSX.Element {
   const filtered = useMemo(() => {
     if (!search.trim()) return sessions
     const q = search.toLowerCase()
-    return sessions.filter(
-      s =>
-        (s.title ?? '').toLowerCase().includes(q) ||
-        s.projectName.toLowerCase().includes(q)
-    )
+    return sessions.filter(s => (s.title ?? '').toLowerCase().includes(q) || s.projectName.toLowerCase().includes(q))
   }, [sessions, search])
 
   const sorted = useMemo(() => {
-    return [...filtered].sort(
-      (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
-    )
+    return [...filtered].sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
   }, [filtered])
 
-  const activeSessions = useMemo(() => sorted.filter(s => s.status === 'active'), [sorted])
-  const inactiveSessions = useMemo(() => sorted.filter(s => s.status !== 'active'), [sorted])
+  const isSessionActive = (s: (typeof sorted)[0]) => {
+    if (s.status === 'active') return true
+    const subs = subsessions[s.id] ?? []
+    return subs.some(sub => sub.status === 'active')
+  }
+  const activeSessions = useMemo(() => sorted.filter(isSessionActive), [sorted, subsessions])
+  const inactiveSessions = useMemo(() => sorted.filter(s => !isSessionActive(s)), [sorted, subsessions])
 
   return (
     <>

@@ -19,6 +19,9 @@ export default function App(): React.JSX.Element {
     replaceSession,
     invalidateMessages,
     setSessionActivity,
+    addSubsession,
+    selectSubsession,
+    clearActiveSubsession,
     viewMode,
     settings
   } = useSessionStore()
@@ -37,14 +40,25 @@ export default function App(): React.JSX.Element {
       updateSession(sess)
 
       // If session has messages but cache is empty, invalidate and reload
-      const { selectedSessionId, messages } = useSessionStore.getState()
+      const { selectedSessionId, messages, activeSubsessionId } = useSessionStore.getState()
       if (sess.id === selectedSessionId && sess.messageCount > 0 && !messages[sess.id]?.length) {
         invalidateMessages(sess.id)
+      }
+
+      // If the completed session is the active subsession, revert chat to parent
+      if (sess.id === activeSubsessionId && sess.status === 'completed') {
+        clearActiveSubsession()
       }
     })
 
     const offSessionStarted = window.api.on('event:sessionStarted', (session: unknown) => {
       const sess = session as Session
+      // Don't add subsessions to the top-level session list
+      if (sess.parentSessionId) {
+        const { addSubsession } = useSessionStore.getState()
+        addSubsession(sess.parentSessionId, sess)
+        return
+      }
       addSession(sess)
       updateSession(sess)
       if (sess.status === 'active') {
@@ -65,15 +79,32 @@ export default function App(): React.JSX.Element {
     const offTerminalExit = window.api.on('event:terminal:exit', (payload: unknown) => {
       const { sessionId } = payload as { sessionId: string }
       removeActiveTerminal(sessionId)
+      // If the exited terminal was for the active subsession, revert chat to parent
+      const { activeSubsessionId } = useSessionStore.getState()
+      if (sessionId === activeSubsessionId) {
+        clearActiveSubsession()
+      }
     })
 
     const offMessageAdded = window.api.on('event:messageAdded', (data: unknown) => {
       const { sessionId, message } = data as { sessionId: string; message: ClaudeMessage }
-      const { selectedSessionId } = useSessionStore.getState()
-      if (sessionId === selectedSessionId) {
+      const { selectedSessionId, activeSubsessionId } = useSessionStore.getState()
+      if (sessionId === selectedSessionId || sessionId === activeSubsessionId) {
         addMessage(sessionId, message)
       }
       loadSessions()
+    })
+
+    const offSubsessionCreated = window.api.on('event:subsessionCreated', (data: unknown) => {
+      const { parentSessionId, session } = data as { parentSessionId: string; session: Session }
+      addSubsession(parentSessionId, session)
+      // Auto-select the parent session if not already selected
+      const { selectedSessionId } = useSessionStore.getState()
+      if (selectedSessionId !== parentSessionId) {
+        selectSession(parentSessionId)
+      }
+      // Set active subsession so chat shows the new subsession's messages
+      selectSubsession(session.id)
     })
 
     const offSessionActivity = window.api.on('event:sessionActivity', (data: unknown) => {
@@ -101,6 +132,7 @@ export default function App(): React.JSX.Element {
       offTerminalLinked()
       offTerminalExit()
       offMessageAdded()
+      offSubsessionCreated()
       offSessionActivity()
     }
   }, [])

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Edit2, Check, X } from 'lucide-react'
+import { Edit2, Check, X, Layers } from 'lucide-react'
 import { useSessionStore } from '../../stores/sessionStore'
 import type { Session } from '../../../../shared/types'
 
@@ -8,7 +8,9 @@ interface Props {
 }
 
 export default function ChatHeader({ session }: Props): React.JSX.Element {
-  const { updateSessionTitle } = useSessionStore()
+  const { updateSessionTitle, subsessions } = useSessionStore()
+  const subs = subsessions[session.id] ?? []
+  const subsessionCount = subs.length
   const [editing, setEditing] = useState(false)
   const [titleValue, setTitleValue] = useState(session.title ?? '')
 
@@ -84,6 +86,13 @@ export default function ChatHeader({ session }: Props): React.JSX.Element {
         <span className="text-xs text-claude-muted truncate max-w-32" title={session.projectPath}>
           {session.projectName}
         </span>
+
+        {subsessionCount > 0 && (
+          <span className="flex items-center gap-1 text-xs text-claude-muted bg-claude-hover px-1.5 py-0.5 rounded">
+            <Layers size={10} />
+            {subsessionCount}
+          </span>
+        )}
       </div>
     </div>
   )

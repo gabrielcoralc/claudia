@@ -26,6 +26,7 @@ export interface Session {
   title?: string
   branch?: string
   source?: 'app' | 'external'
+  parentSessionId?: string
 }
 
 export type ClaudeMessageRole = 'user' | 'assistant'
@@ -223,6 +224,7 @@ export interface IpcChannels {
     projectPath: string,
     branchName?: string
   ) => { success: boolean; branch?: string; error?: string }
+  'sessions:getSubsessions': (parentId: string) => Session[]
 
   // Projects
   'projects:list': () => Project[]
@@ -269,4 +271,5 @@ export interface IpcChannels {
   'event:terminalLinked': { launchId: string; sessionId: string }
   'event:sessionActivity': { sessionId: string; type: string; detail?: string; timestamp: string }
   'event:terminal:exit': { sessionId: string }
+  'event:subsessionCreated': { parentSessionId: string; session: Session }
 }

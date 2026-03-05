@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { useSessionStore } from '../stores/sessionStore'
-import type { Session, SessionActivity } from '../../../shared/types'
+import type { Session } from '../../../shared/types'
+import type { SessionActivity } from '../stores/sessionStore'
 
 // Mock window.api
 const mockApi = {
@@ -10,7 +11,8 @@ const mockApi = {
     updateTitle: vi.fn().mockResolvedValue(undefined),
     updateStatus: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn().mockResolvedValue(undefined),
-    resetActive: vi.fn().mockResolvedValue(undefined)
+    resetActive: vi.fn().mockResolvedValue(undefined),
+    getSubsessions: vi.fn().mockResolvedValue([])
   },
   projects: {
     list: vi.fn().mockResolvedValue([])
@@ -312,7 +314,7 @@ describe('sessionStore', () => {
 
   describe('invalidateMessages', () => {
     it('deletes message cache and triggers reload', async () => {
-      const { invalidateMessages, loadMessages } = useSessionStore.getState()
+      const { invalidateMessages } = useSessionStore.getState()
       const sessionId = 'session-123'
 
       // Pre-populate cache

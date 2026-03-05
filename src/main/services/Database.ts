@@ -140,6 +140,15 @@ function initSchema(db: Database.Database): void {
     // Column already exists — safe to ignore
   }
 
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN parent_session_id TEXT`)
+  } catch {
+    // Column already exists — safe to ignore
+  }
+
+  // Cleanup: fix self-referencing parent_session_id (caused by resume bug)
+  db.exec(`UPDATE sessions SET parent_session_id = NULL WHERE parent_session_id = id`)
+
   const existingSettings = db.prepare('SELECT key FROM settings WHERE key = ?').get('app_settings')
   if (!existingSettings) {
     db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('app_settings', JSON.stringify(DEFAULT_SETTINGS))
@@ -155,12 +164,12 @@ export const sessionDb = {
         id, project_path, project_name, transcript_path, started_at, ended_at,
         status, total_cost_usd, total_input_tokens, total_output_tokens,
         cache_read_tokens, cache_creation_tokens,
-        message_count, title, tags, source, branch
+        message_count, title, tags, source, branch, parent_session_id
       ) VALUES (
         @id, @projectPath, @projectName, @transcriptPath, @startedAt, @endedAt,
         @status, @totalCostUsd, @totalInputTokens, @totalOutputTokens,
         @cacheReadTokens, @cacheCreationTokens,
-        @messageCount, @title, @tags, @source, @branch
+        @messageCount, @title, @tags, @source, @branch, @parentSessionId
       )
       ON CONFLICT(id) DO UPDATE SET
         ended_at = @endedAt,
@@ -192,7 +201,8 @@ export const sessionDb = {
       title: session.title ?? null,
       tags: JSON.stringify(session.tags),
       source: session.source ?? 'app',
-      branch: session.branch ?? null
+      branch: session.branch ?? null,
+      parentSessionId: session.parentSessionId ?? null
     })
 
     db.prepare(
@@ -217,11 +227,24 @@ export const sessionDb = {
 
   list(): Session[] {
     const db = getDb()
-    const rows = db.prepare("SELECT * FROM sessions WHERE source = 'app' ORDER BY started_at DESC").all() as Record<
-      string,
-      unknown
-    >[]
+    const rows = db
+      .prepare("SELECT * FROM sessions WHERE source = 'app' AND parent_session_id IS NULL ORDER BY started_at DESC")
+      .all() as Record<string, unknown>[]
     return rows.map(rowToSession)
+  },
+
+  getSubsessions(parentId: string): Session[] {
+    const db = getDb()
+    const rows = db
+      .prepare('SELECT * FROM sessions WHERE parent_session_id = ? ORDER BY started_at ASC')
+      .all(parentId) as Record<string, unknown>[]
+    return rows.map(rowToSession)
+  },
+
+  getRootSessionId(sessionId: string): string {
+    const session = sessionDb.getById(sessionId)
+    if (!session) return sessionId
+    return session.parentSessionId ?? sessionId
   },
 
   delete(id: string): void {
@@ -309,6 +332,7 @@ export const sessionDb = {
     let query = `
       SELECT * FROM sessions
       WHERE project_path = ?
+        AND parent_session_id IS NULL
     `
     const params: unknown[] = [projectPath]
 
@@ -453,7 +477,8 @@ function rowToSession(row: Record<string, unknown>): Session {
       }
     })(),
     branch: (row.branch as string | null) ?? undefined,
-    source: (row.source as Session['source']) ?? 'app'
+    source: (row.source as Session['source']) ?? 'app',
+    parentSessionId: (row.parent_session_id as string | null) ?? undefined
   }
 }
 

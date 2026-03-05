@@ -70,7 +70,6 @@ function PlainMarkdown({ text }: { text: string }): React.JSX.Element {
   const lines = text.split('\n')
   const elements: React.JSX.Element[] = []
   let inCode = false
-  let codeLang = ''
   let codeLines: string[] = []
   let key = 0
   for (const line of lines) {
@@ -83,10 +82,8 @@ function PlainMarkdown({ text }: { text: string }): React.JSX.Element {
         )
         inCode = false
         codeLines = []
-        codeLang = ''
       } else {
         inCode = true
-        codeLang = line.slice(3).trim()
       }
       continue
     }

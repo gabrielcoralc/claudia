@@ -42,7 +42,9 @@ export default function ToolUseBlock({ toolUse, toolResult }: Props): React.JSX.
   const inputText = renderInput(toolUse.name, toolUse.input)
 
   return (
-    <div className={`rounded-lg overflow-hidden border ${isError ? 'border-red-800/50 tool-result-error' : 'tool-use-block border-blue-800/30'} bg-black/20`}>
+    <div
+      className={`rounded-lg overflow-hidden border ${isError ? 'border-red-800/50 tool-result-error' : 'tool-use-block border-blue-800/30'} bg-black/20`}
+    >
       <button
         onClick={() => setExpanded(e => !e)}
         className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 transition-colors"
@@ -50,16 +52,15 @@ export default function ToolUseBlock({ toolUse, toolResult }: Props): React.JSX.
         {toolIcon(toolUse.name)}
         <span className="text-xs font-medium text-claude-text flex-1 text-left font-mono">
           {toolUse.name}
-          {toolUse.name === 'Bash' && toolUse.input.command && (
+          {toolUse.name === 'Bash' && toolUse.input.command != null && (
             <span className="text-claude-muted font-normal ml-2 truncate">
               {String(toolUse.input.command).slice(0, 60)}
             </span>
           )}
-          {(toolUse.name === 'Read' || toolUse.name === 'Write' || toolUse.name === 'Edit') && toolUse.input.file_path && (
-            <span className="text-claude-muted font-normal ml-2 truncate">
-              {String(toolUse.input.file_path)}
-            </span>
-          )}
+          {(toolUse.name === 'Read' || toolUse.name === 'Write' || toolUse.name === 'Edit') &&
+            toolUse.input.file_path != null && (
+              <span className="text-claude-muted font-normal ml-2 truncate">{String(toolUse.input.file_path)}</span>
+            )}
         </span>
         {isError && <span className="text-xs text-red-400">error</span>}
         {toolResult && !isError && <span className="text-xs text-green-400">✓</span>}
@@ -84,10 +85,13 @@ export default function ToolUseBlock({ toolUse, toolResult }: Props): React.JSX.
               <div className={`text-xs mb-1 ${isError ? 'text-red-400' : 'text-claude-muted'}`}>
                 {isError ? 'Error' : 'Result'}
               </div>
-              <pre className={`text-xs font-mono rounded p-2 overflow-x-auto whitespace-pre-wrap max-h-64 overflow-y-auto ${
-                isError ? 'text-red-300 bg-red-950/30' : 'text-green-300 bg-black/30'
-              }`}>
-                {resultText.slice(0, 4000)}{resultText.length > 4000 ? '\n… (truncated)' : ''}
+              <pre
+                className={`text-xs font-mono rounded p-2 overflow-x-auto whitespace-pre-wrap max-h-64 overflow-y-auto ${
+                  isError ? 'text-red-300 bg-red-950/30' : 'text-green-300 bg-black/30'
+                }`}
+              >
+                {resultText.slice(0, 4000)}
+                {resultText.length > 4000 ? '\n… (truncated)' : ''}
               </pre>
             </div>
           )}

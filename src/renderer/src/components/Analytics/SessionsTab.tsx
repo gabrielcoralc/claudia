@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { formatNumber, formatCost } from '../../utils/format'
 import { format } from 'date-fns'
 import type { AnalyticsFilters, SessionMetrics, EntityDailyMetrics } from '../../../../shared/types'
@@ -167,11 +167,13 @@ export default function SessionsTab({ filters }: Props): React.JSX.Element {
                   fontSize: '12px'
                 }}
                 labelStyle={{ color: '#F5F5F5' }}
-                formatter={(value: number, name: string) => {
-                  const sessionId = name.replace('_input', '')
-                  const sessionName = sessionNames.get(sessionId) || sessionId.slice(0, 8)
-                  return [formatNumber(value), sessionName]
-                }}
+                formatter={
+                  ((value: number, name: string) => {
+                    const sessionId = name.replace('_input', '')
+                    const sessionName = sessionNames.get(sessionId) || sessionId.slice(0, 8)
+                    return [formatNumber(value), sessionName]
+                  }) as never
+                }
               />
               <Legend
                 wrapperStyle={{ fontSize: '11px' }}
@@ -219,11 +221,13 @@ export default function SessionsTab({ filters }: Props): React.JSX.Element {
                   fontSize: '12px'
                 }}
                 labelStyle={{ color: '#F5F5F5' }}
-                formatter={(value: number, name: string) => {
-                  const sessionId = name.replace('_output', '')
-                  const sessionName = sessionNames.get(sessionId) || sessionId.slice(0, 8)
-                  return [formatNumber(value), sessionName]
-                }}
+                formatter={
+                  ((value: number, name: string) => {
+                    const sessionId = name.replace('_output', '')
+                    const sessionName = sessionNames.get(sessionId) || sessionId.slice(0, 8)
+                    return [formatNumber(value), sessionName]
+                  }) as never
+                }
               />
               <Legend
                 wrapperStyle={{ fontSize: '11px' }}
@@ -271,10 +275,12 @@ export default function SessionsTab({ filters }: Props): React.JSX.Element {
                   fontSize: '12px'
                 }}
                 labelStyle={{ color: '#F5F5F5' }}
-                formatter={(value: number, name: string) => [
-                  `$${value.toFixed(4)}`,
-                  sessionNames.get(name) || name.slice(0, 8)
-                ]}
+                formatter={
+                  ((value: number, name: string) => [
+                    `$${value.toFixed(4)}`,
+                    sessionNames.get(name) || name.slice(0, 8)
+                  ]) as never
+                }
               />
               <Legend
                 wrapperStyle={{ fontSize: '11px' }}

@@ -41,6 +41,7 @@ interface PendingLaunch {
 }
 
 const pendingLaunches = new Map<string, PendingLaunch>()
+const pendingResumes = new Map<string, number>() // projectPath → timestamp
 
 export function registerPendingLaunch(projectPath: string, launchId: string, name: string, branch?: string): void {
   pendingLaunches.set(projectPath, { launchId, name, branch })
@@ -66,6 +67,19 @@ export function consumeAnyPendingLaunch(): { projectPath: string; launch: Pendin
   const [projectPath, launch] = first.value
   pendingLaunches.delete(projectPath)
   return { projectPath, launch }
+}
+
+export function registerPendingResume(projectPath: string): void {
+  pendingResumes.set(projectPath, Date.now())
+}
+
+export function hasPendingResume(projectPath: string): boolean {
+  const ts = pendingResumes.get(projectPath)
+  if (ts && Date.now() - ts < 15000) {
+    return true
+  }
+  if (ts) pendingResumes.delete(projectPath) // expired — clean up
+  return false
 }
 
 export async function startFileWatcher(): Promise<void> {

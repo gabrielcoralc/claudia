@@ -110,6 +110,15 @@ export function isTerminalRunning(sessionId: string): boolean {
   return terminals.has(sessionId)
 }
 
+export function findTerminalByCwd(cwd: string): { currentSessionId: string; cwd: string } | undefined {
+  for (const inst of terminals.values()) {
+    if (inst.cwd === cwd) {
+      return { currentSessionId: inst.currentId, cwd: inst.cwd }
+    }
+  }
+  return undefined
+}
+
 // ─── Git helpers ─────────────────────────────────────────────────────────────
 
 export async function getUnstagedDiff(projectPath: string): Promise<{

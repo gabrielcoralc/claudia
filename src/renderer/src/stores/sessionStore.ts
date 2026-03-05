@@ -19,6 +19,8 @@ interface SessionStore {
   activeTerminals: Set<string>
   hiddenTerminals: Set<string>
   sessionActivity: Record<string, SessionActivity>
+  subsessions: Record<string, Session[]>
+  activeSubsessionId: string | null
 
   loadSessions: () => Promise<void>
   loadProjects: () => Promise<void>
@@ -49,6 +51,11 @@ interface SessionStore {
   linkTerminal: (launchId: string, sessionId: string) => void
   replaceSession: (launchId: string, sessionId: string, session: Session) => void
   setSessionActivity: (sessionId: string, activity: SessionActivity | null) => void
+  loadSubsessions: (parentId: string) => Promise<void>
+  addSubsession: (parentSessionId: string, session: Session) => void
+  selectSubsession: (subsessionId: string | null) => void
+  clearActiveSubsession: () => void
+  switchToSession: (targetId: string, projectPath: string, branch?: string, parentSessionId?: string) => Promise<void>
 }
 
 export const useSessionStore = create<SessionStore>((set, get) => ({
@@ -63,6 +70,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   activeTerminals: new Set<string>(),
   hiddenTerminals: new Set<string>(),
   sessionActivity: {},
+  subsessions: {},
+  activeSubsessionId: null,
 
   loadSessions: async () => {
     set({ isLoading: true })
@@ -117,16 +126,28 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   selectSession: sessionId => {
-    set({ selectedSessionId: sessionId })
+    set({ selectedSessionId: sessionId, activeSubsessionId: null })
     if (sessionId) {
       get().loadMessages(sessionId)
     }
   },
 
   updateSession: session => {
-    set(state => ({
-      sessions: state.sessions.map(s => (s.id === session.id ? session : s))
-    }))
+    set(state => {
+      // Update in main sessions list
+      const updatedSessions = state.sessions.map(s => (s.id === session.id ? session : s))
+
+      // Also update in subsessions if this session is a subsession
+      const updatedSubsessions = { ...state.subsessions }
+      if (session.parentSessionId) {
+        const parentSubs = updatedSubsessions[session.parentSessionId]
+        if (parentSubs) {
+          updatedSubsessions[session.parentSessionId] = parentSubs.map(s => (s.id === session.id ? session : s))
+        }
+      }
+
+      return { sessions: updatedSessions, subsessions: updatedSubsessions }
+    })
   },
 
   addSession: session => {
@@ -261,6 +282,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       await window.api.terminal.kill(sessionId)
     }
 
+    // Register pending resume so HooksServer won't create false subsessions
+    await window.api.sessions.registerResume(projectPath)
+
     const result = await window.api.terminal.create(sessionId, projectPath)
     if (result.success) {
       set(state => {
@@ -366,6 +390,83 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       }
       return { sessionActivity: next }
     })
+  },
+
+  loadSubsessions: async (parentId: string) => {
+    try {
+      const subs = await window.api.sessions.getSubsessions(parentId)
+      set(state => ({
+        subsessions: { ...state.subsessions, [parentId]: subs }
+      }))
+    } catch (err) {
+      console.error('Failed to load subsessions:', err)
+    }
+  },
+
+  addSubsession: (parentSessionId: string, session: Session) => {
+    set(state => {
+      const existing = state.subsessions[parentSessionId] ?? []
+      const alreadyExists = existing.some(s => s.id === session.id)
+      if (alreadyExists) return state
+      return {
+        subsessions: {
+          ...state.subsessions,
+          [parentSessionId]: [...existing, session]
+        }
+      }
+    })
+  },
+
+  selectSubsession: (subsessionId: string | null) => {
+    set({ activeSubsessionId: subsessionId })
+    if (subsessionId) {
+      get().loadMessages(subsessionId)
+    }
+  },
+
+  clearActiveSubsession: () => {
+    set({ activeSubsessionId: null })
+  },
+
+  switchToSession: async (targetId, projectPath, branch?, parentSessionId?) => {
+    const state = get()
+    // Kill all terminals belonging to this session family (parent + subsessions)
+    const idsToKill: string[] = []
+    const parentId = parentSessionId ?? state.selectedSessionId
+    if (parentId && state.activeTerminals.has(parentId)) {
+      idsToKill.push(parentId)
+    }
+    if (parentId) {
+      const subs = state.subsessions[parentId] ?? []
+      for (const sub of subs) {
+        if (state.activeTerminals.has(sub.id)) {
+          idsToKill.push(sub.id)
+        }
+      }
+    }
+    for (const id of idsToKill) {
+      await window.api.terminal.kill(id)
+    }
+    // Clear killed terminals from state
+    set(s => {
+      const next = new Set(s.activeTerminals)
+      const nextHidden = new Set(s.hiddenTerminals)
+      for (const id of idsToKill) {
+        next.delete(id)
+        nextHidden.delete(id)
+      }
+      return { activeTerminals: next, hiddenTerminals: nextHidden }
+    })
+    // Set the active subsession (or clear if switching to parent)
+    if (parentSessionId && targetId !== parentSessionId) {
+      set({ activeSubsessionId: targetId })
+    } else if (!parentSessionId) {
+      set({ activeSubsessionId: null })
+    } else {
+      set({ activeSubsessionId: null })
+    }
+    // Resume the target session
+    await get().resumeSession(targetId, projectPath, branch)
   },
 
   replaceSession: (launchId, sessionId, session) => {

@@ -20,7 +20,7 @@ function statusLabel(status: Session['status']): string {
   return 'Completed'
 }
 
-function taskStatus(msg: ClaudeMessage, isLast: boolean, sessionStatus: Session['status']): string {
+function taskStatus(_msg: ClaudeMessage, isLast: boolean, sessionStatus: Session['status']): string {
   if (isLast && sessionStatus === 'active') return 'Active'
   return 'Closed'
 }
