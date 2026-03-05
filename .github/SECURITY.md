@@ -56,7 +56,8 @@ npm update package-name --registry=https://registry.npmjs.org/
 ## Reporting Vulnerabilities
 
 If you discover a security vulnerability, please report it privately to:
-- Email: [your-email]
+- Email: [gabrielcoralc95@gmail.com](mailto:gabrielcoralc95@gmail.com)
 - GitHub Security Advisory: Use "Report a vulnerability" button
+- Create a private issue
 
 **Do not** open public issues for security vulnerabilities.
