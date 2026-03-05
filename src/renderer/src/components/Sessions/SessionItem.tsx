@@ -59,24 +59,22 @@ export default function SessionItem({ session, isSelected, onSelect }: Props): R
     >
       <div className="flex items-start gap-2">
         <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${statusColor}`} />
-          <div className="flex-1 min-w-0 flex items-center gap-1">
-            {title ? (
-              <span className="text-xs font-medium text-claude-text leading-tight line-clamp-2">
-                {title}
-              </span>
-            ) : (
-              <span className="text-xs font-mono text-claude-muted leading-tight" title={session.id}>
-                {shortId}
-              </span>
-            )}
-            <button
-              onClick={copySessionId}
-              title={`Copy session ID: ${session.id}`}
-              className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-claude-muted hover:text-claude-text p-0.5 rounded"
-            >
-              {copied ? <Check size={10} className="text-green-400" /> : <Copy size={10} />}
-            </button>
-          </div>
+        <div className="flex-1 min-w-0 flex items-center gap-1">
+          {title ? (
+            <span className="text-xs font-medium text-claude-text leading-tight line-clamp-2">{title}</span>
+          ) : (
+            <span className="text-xs font-mono text-claude-muted leading-tight" title={session.id}>
+              {shortId}
+            </span>
+          )}
+          <button
+            onClick={copySessionId}
+            title={`Copy session ID: ${session.id}`}
+            className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-claude-muted hover:text-claude-text p-0.5 rounded"
+          >
+            {copied ? <Check size={10} className="text-green-400" /> : <Copy size={10} />}
+          </button>
+        </div>
       </div>
 
       <div className="flex items-center gap-3 pl-3.5">
@@ -105,12 +103,6 @@ export default function SessionItem({ session, isSelected, onSelect }: Props): R
             live
           </span>
         )}
-
-        {session.model && (
-          <span className="text-xs text-claude-muted/60 truncate max-w-16" title={session.model}>
-            {session.model.includes('opus') ? 'Opus' : session.model.includes('sonnet') ? 'Sonnet' : session.model.includes('haiku') ? 'Haiku' : session.model.split('-')[0]}
-          </span>
-        )}
       </div>
 
       <div className="flex items-center gap-1.5 pl-3.5">
@@ -132,10 +124,7 @@ export default function SessionItem({ session, isSelected, onSelect }: Props): R
       {session.tags.length > 0 && (
         <div className="flex flex-wrap gap-1 pl-3.5">
           {session.tags.slice(0, 3).map(tag => (
-            <span
-              key={tag}
-              className="text-xs px-1.5 py-0.5 rounded bg-claude-border text-claude-muted"
-            >
+            <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-claude-border text-claude-muted">
               {tag}
             </span>
           ))}

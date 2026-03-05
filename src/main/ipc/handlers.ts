@@ -44,6 +44,38 @@ import {
 
 const execAsync = promisify(exec)
 
+const COMMON_CLAUDE_PATHS = [
+  '/opt/homebrew/bin/claude',
+  '/usr/local/bin/claude',
+  `${process.env.HOME}/.npm-global/bin/claude`,
+  `${process.env.HOME}/.nvm/versions/node/current/bin/claude`
+]
+
+async function resolveClaudePath(settings: { claudeExecutablePath: string }): Promise<string> {
+  if (settings.claudeExecutablePath) return settings.claudeExecutablePath
+
+  // Try which (works in dev, may fail in packaged app)
+  try {
+    return await which('claude')
+  } catch {}
+
+  // Try resolving via login shell (gets full PATH from .zshrc/.zprofile)
+  try {
+    const { stdout } = await execAsync('/bin/zsh -lc "which claude"')
+    const resolved = stdout.trim()
+    if (resolved && fs.existsSync(resolved)) return resolved
+  } catch {}
+
+  // Try common installation paths
+  for (const p of COMMON_CLAUDE_PATHS) {
+    if (fs.existsSync(p)) return p
+  }
+
+  throw new Error(
+    'Claude Code CLI not found. Install it with: npm install -g @anthropic-ai/claude-code — or set the path manually in Settings.'
+  )
+}
+
 const runningProcesses = new Map<number, ChildProcess>()
 
 export function registerIpcHandlers(): void {
@@ -234,7 +266,6 @@ export function registerIpcHandlers(): void {
         projectName,
         transcriptPath: target.transcriptPath,
         startedAt: stat ? stat.birthtime.toISOString() : new Date().toISOString(),
-        model: 'claude-opus-4-5',
         status: 'completed',
         totalCostUsd: costSummary.totalCostUsd,
         totalInputTokens: costSummary.totalInputTokens,
@@ -328,17 +359,11 @@ export function registerIpcHandlers(): void {
     ) => {
       try {
         const settings = settingsDb.get()
-        let claudePath = settings.claudeExecutablePath
-
-        if (!claudePath) {
-          try {
-            claudePath = await which('claude')
-          } catch {
-            return {
-              success: false,
-              error: 'Claude Code not found in PATH. Install it with: npm install -g @anthropic-ai/claude-code'
-            }
-          }
+        let claudePath: string
+        try {
+          claudePath = await resolveClaudePath(settings)
+        } catch (err) {
+          return { success: false, error: String((err as Error).message ?? err) }
         }
 
         const args: string[] = ['--output-format', 'stream-json', '--verbose']
@@ -452,7 +477,6 @@ export function registerIpcHandlers(): void {
           projectName,
           transcriptPath: '',
           startedAt: now,
-          model: 'claude-opus-4-5',
           status: 'active' as const,
           totalCostUsd: 0,
           totalInputTokens: 0,
@@ -549,13 +573,14 @@ export function registerIpcHandlers(): void {
       console.log(`[git:reviewWithClaude] START cwd=${opts.projectPath} prompt=${opts.prompt.slice(0, 120)}…`)
       try {
         const settings = settingsDb.get()
-        let claudePath = settings.claudeExecutablePath
-        if (!claudePath) {
-          claudePath = await which('claude')
-          console.log(`[git:reviewWithClaude] Resolved claude path via which: ${claudePath}`)
-        } else {
-          console.log(`[git:reviewWithClaude] Using configured claude path: ${claudePath}`)
+        let claudePath: string
+        try {
+          claudePath = await resolveClaudePath(settings)
+        } catch (err) {
+          console.error(`[git:reviewWithClaude] Claude CLI not found:`, err)
+          return { success: false, error: String((err as Error).message ?? err) }
         }
+        console.log(`[git:reviewWithClaude] Using claude path: ${claudePath}`)
 
         const args = ['-p', opts.prompt, '--output-format', 'json', '--max-turns', '10']
         console.log(

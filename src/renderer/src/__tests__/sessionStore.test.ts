@@ -17,7 +17,6 @@ const mockApi = {
   },
   settings: {
     get: vi.fn().mockResolvedValue({
-      defaultModel: 'claude-opus-4-5',
       hooksEnabled: true
     }),
     update: vi.fn().mockResolvedValue(undefined)
@@ -51,7 +50,6 @@ describe('sessionStore', () => {
     projectName: 'my-project',
     transcriptPath: '/Users/test/.claude/projects/test/session.jsonl',
     startedAt: '2026-02-22T10:00:00Z',
-    model: 'claude-opus-4-5',
     status: 'active',
     messageCount: 5,
     tags: [],

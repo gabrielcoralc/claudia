@@ -15,7 +15,6 @@ export interface Session {
   transcriptPath: string
   startedAt: string
   endedAt?: string
-  model: string
   status: SessionStatus
   totalCostUsd?: number
   totalInputTokens?: number
@@ -155,7 +154,6 @@ export interface SessionMetrics {
   outputTokens: number
   totalTokens: number
   startedAt: string
-  model: string
 }
 
 export interface ProjectMetrics {
@@ -188,8 +186,6 @@ export interface EntityDailyMetrics {
 
 export interface AppSettings {
   defaultAllowedTools: string[]
-  defaultPermissionMode: 'default' | 'plan' | 'acceptEdits' | 'bypassPermissions'
-  defaultModel: string
   hooksEnabled: boolean
   hooksServerPort: number
   claudeExecutablePath: string
@@ -201,8 +197,6 @@ export interface AppSettings {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   defaultAllowedTools: [],
-  defaultPermissionMode: 'default',
-  defaultModel: 'claude-opus-4-5',
   hooksEnabled: true,
   hooksServerPort: 27182,
   claudeExecutablePath: '',

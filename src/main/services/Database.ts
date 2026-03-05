@@ -153,12 +153,12 @@ export const sessionDb = {
       `
       INSERT INTO sessions (
         id, project_path, project_name, transcript_path, started_at, ended_at,
-        model, status, total_cost_usd, total_input_tokens, total_output_tokens,
+        status, total_cost_usd, total_input_tokens, total_output_tokens,
         cache_read_tokens, cache_creation_tokens,
         message_count, title, tags, source, branch
       ) VALUES (
         @id, @projectPath, @projectName, @transcriptPath, @startedAt, @endedAt,
-        @model, @status, @totalCostUsd, @totalInputTokens, @totalOutputTokens,
+        @status, @totalCostUsd, @totalInputTokens, @totalOutputTokens,
         @cacheReadTokens, @cacheCreationTokens,
         @messageCount, @title, @tags, @source, @branch
       )
@@ -182,7 +182,6 @@ export const sessionDb = {
       transcriptPath: session.transcriptPath,
       startedAt: session.startedAt,
       endedAt: session.endedAt ?? null,
-      model: session.model,
       status: session.status,
       totalCostUsd: session.totalCostUsd ?? null,
       totalInputTokens: session.totalInputTokens ?? null,
@@ -438,7 +437,6 @@ function rowToSession(row: Record<string, unknown>): Session {
     transcriptPath: row.transcript_path as string,
     startedAt: row.started_at as string,
     endedAt: (row.ended_at as string | null) ?? undefined,
-    model: row.model as string,
     status: row.status as Session['status'],
     totalCostUsd: (row.total_cost_usd as number | null) ?? undefined,
     totalInputTokens: (row.total_input_tokens as number | null) ?? undefined,
@@ -583,8 +581,7 @@ export const analyticsDb = {
         COALESCE(total_cost_usd, 0) as cost,
         COALESCE(total_input_tokens, 0) as inputTokens,
         COALESCE(total_output_tokens, 0) as outputTokens,
-        started_at as startedAt,
-        model
+        started_at as startedAt
       FROM sessions
       ${whereClause}
       ORDER BY total_cost_usd DESC
@@ -601,8 +598,7 @@ export const analyticsDb = {
       inputTokens: row.inputTokens as number,
       outputTokens: row.outputTokens as number,
       totalTokens: (row.inputTokens as number) + (row.outputTokens as number),
-      startedAt: row.startedAt as string,
-      model: row.model as string
+      startedAt: row.startedAt as string
     }))
   },
 

@@ -95,9 +95,6 @@ export default function SessionInfoTab({ session }: Props): React.JSX.Element {
             </>
           )}
 
-          <span className="text-claude-muted">Model</span>
-          <span className="text-claude-text font-mono">{session.model || '—'}</span>
-
           <span className="text-claude-muted">Messages</span>
           <span className="text-claude-text">{session.messageCount}</span>
         </div>
@@ -105,7 +102,10 @@ export default function SessionInfoTab({ session }: Props): React.JSX.Element {
         {session.tags.length > 0 && (
           <div className="flex flex-wrap gap-1 pt-1">
             {session.tags.map(tag => (
-              <span key={tag} className="text-xs px-2 py-0.5 rounded-full bg-claude-hover text-claude-muted border border-claude-border">
+              <span
+                key={tag}
+                className="text-xs px-2 py-0.5 rounded-full bg-claude-hover text-claude-muted border border-claude-border"
+              >
                 {tag}
               </span>
             ))}
@@ -115,9 +115,7 @@ export default function SessionInfoTab({ session }: Props): React.JSX.Element {
 
       {/* Tasks list */}
       <div className="space-y-2">
-        <h2 className="text-sm font-semibold text-claude-text px-0.5">
-          Tasks in this Session ({userMessages.length})
-        </h2>
+        <h2 className="text-sm font-semibold text-claude-text px-0.5">Tasks in this Session ({userMessages.length})</h2>
 
         {userMessages.length === 0 ? (
           <p className="text-xs text-claude-muted px-0.5">No tasks yet.</p>
@@ -127,13 +125,14 @@ export default function SessionInfoTab({ session }: Props): React.JSX.Element {
             const ts = msg.timestamp ? timeAgo(msg.timestamp) : ''
             const status = taskStatus(msg, isLast, session.status)
             const textBlock = msg.content.find(b => b.type === 'text')
-            const shortText = textBlock && textBlock.type === 'text'
-              ? textBlock.text.trim().slice(0, 120)
-              : '(no text)'
+            const shortText = textBlock && textBlock.type === 'text' ? textBlock.text.trim().slice(0, 120) : '(no text)'
             const fullText = textBlock && textBlock.type === 'text' ? textBlock.text.trim() : ''
 
             return (
-              <div key={msg.id || idx} className="bg-claude-panel rounded-xl border border-claude-border p-3 space-y-1.5">
+              <div
+                key={msg.id || idx}
+                className="bg-claude-panel rounded-xl border border-claude-border p-3 space-y-1.5"
+              >
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${taskStatusClass(status)}`}>
                     {status}
@@ -144,7 +143,10 @@ export default function SessionInfoTab({ session }: Props): React.JSX.Element {
 
                 <div>
                   <p className="text-xs text-claude-muted mb-0.5 font-medium">Description</p>
-                  <p className="text-xs text-claude-text leading-relaxed">{shortText}{fullText.length > 120 ? '…' : ''}</p>
+                  <p className="text-xs text-claude-text leading-relaxed">
+                    {shortText}
+                    {fullText.length > 120 ? '…' : ''}
+                  </p>
                 </div>
 
                 {fullText.length > 120 && (

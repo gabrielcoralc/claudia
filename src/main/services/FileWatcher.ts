@@ -387,7 +387,6 @@ async function processNewTranscript(sessionId: string, projectPath: string, tran
     projectName,
     transcriptPath,
     startedAt: stat ? stat.birthtime.toISOString() : new Date().toISOString(),
-    model: 'claude-opus-4-5',
     status: existingSession ? existingSession.status : 'completed',
     totalCostUsd: costSummary.totalCostUsd ?? 0,
     totalInputTokens: costSummary.totalInputTokens ?? 0,
