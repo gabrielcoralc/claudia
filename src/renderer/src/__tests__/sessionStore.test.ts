@@ -12,7 +12,8 @@ const mockApi = {
     updateStatus: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn().mockResolvedValue(undefined),
     resetActive: vi.fn().mockResolvedValue(undefined),
-    getSubsessions: vi.fn().mockResolvedValue([])
+    getSubsessions: vi.fn().mockResolvedValue([]),
+    registerResume: vi.fn().mockResolvedValue(undefined)
   },
   projects: {
     list: vi.fn().mockResolvedValue([])
@@ -673,6 +674,249 @@ describe('sessionStore', () => {
 
       // Should NOT have called the API (early return)
       expect(mockApi.sessions.getMessages).not.toHaveBeenCalled()
+    })
+  })
+
+  // ── resumeSession ──────────────────────────────────────────────────────────
+
+  describe('resumeSession', () => {
+    const sessionId = 'resume-session-001'
+    const projectPath = '/Users/test/my-project'
+
+    it('registers pending resume before creating terminal', async () => {
+      const { resumeSession } = useSessionStore.getState()
+
+      await resumeSession(sessionId, projectPath)
+
+      expect(mockApi.sessions.registerResume).toHaveBeenCalledWith(projectPath)
+      // registerResume should be called BEFORE terminal.create
+      const registerOrder = mockApi.sessions.registerResume.mock.invocationCallOrder[0]
+      const createOrder = mockApi.terminal.create.mock.invocationCallOrder[0]
+      expect(registerOrder).toBeLessThan(createOrder)
+    })
+
+    it('kills existing terminal before resuming', async () => {
+      useSessionStore.setState({
+        activeTerminals: new Set([sessionId])
+      })
+
+      const { resumeSession } = useSessionStore.getState()
+      await resumeSession(sessionId, projectPath)
+
+      expect(mockApi.terminal.kill).toHaveBeenCalledWith(sessionId)
+    })
+
+    it('adds session to activeTerminals on success', async () => {
+      mockApi.terminal.create.mockResolvedValueOnce({ success: true })
+
+      const { resumeSession } = useSessionStore.getState()
+      await resumeSession(sessionId, projectPath)
+
+      const { activeTerminals } = useSessionStore.getState()
+      expect(activeTerminals.has(sessionId)).toBe(true)
+    })
+
+    it('removes session from hiddenTerminals on success', async () => {
+      useSessionStore.setState({
+        hiddenTerminals: new Set([sessionId])
+      })
+      mockApi.terminal.create.mockResolvedValueOnce({ success: true })
+
+      const { resumeSession } = useSessionStore.getState()
+      await resumeSession(sessionId, projectPath)
+
+      const { hiddenTerminals } = useSessionStore.getState()
+      expect(hiddenTerminals.has(sessionId)).toBe(false)
+    })
+
+    it('does not add to activeTerminals on failure', async () => {
+      mockApi.terminal.create.mockResolvedValueOnce({ success: false })
+
+      const { resumeSession } = useSessionStore.getState()
+      await resumeSession(sessionId, projectPath)
+
+      const { activeTerminals } = useSessionStore.getState()
+      expect(activeTerminals.has(sessionId)).toBe(false)
+    })
+  })
+
+  // ── switchToSession ────────────────────────────────────────────────────────
+
+  describe('switchToSession', () => {
+    const parentId = 'parent-session-001'
+    const sub1Id = 'sub-session-001'
+    const sub2Id = 'sub-session-002'
+    const projectPath = '/Users/test/my-project'
+    const branch = 'feature/test'
+
+    const parentSession: Session = {
+      id: parentId,
+      projectPath,
+      projectName: 'my-project',
+      transcriptPath: '',
+      startedAt: '2026-02-22T10:00:00Z',
+      status: 'completed',
+      messageCount: 5,
+      tags: [],
+      source: 'app',
+      branch
+    }
+
+    const sub1: Session = { ...parentSession, id: sub1Id, status: 'active', parentSessionId: parentId }
+    const sub2: Session = { ...parentSession, id: sub2Id, status: 'completed', parentSessionId: parentId }
+
+    beforeEach(() => {
+      useSessionStore.setState({
+        sessions: [parentSession],
+        selectedSessionId: parentId,
+        subsessions: { [parentId]: [sub1, sub2] },
+        activeTerminals: new Set([sub1Id]),
+        hiddenTerminals: new Set()
+      })
+    })
+
+    it('kills all family terminals before switching', async () => {
+      const { switchToSession } = useSessionStore.getState()
+
+      await switchToSession(sub2Id, projectPath, branch, parentId)
+
+      expect(mockApi.terminal.kill).toHaveBeenCalledWith(sub1Id)
+    })
+
+    it('kills parent terminal when switching to a subsession', async () => {
+      useSessionStore.setState({
+        activeTerminals: new Set([parentId])
+      })
+
+      const { switchToSession } = useSessionStore.getState()
+      await switchToSession(sub1Id, projectPath, branch, parentId)
+
+      expect(mockApi.terminal.kill).toHaveBeenCalledWith(parentId)
+    })
+
+    it('clears killed terminals from state', async () => {
+      const { switchToSession } = useSessionStore.getState()
+
+      await switchToSession(sub2Id, projectPath, branch, parentId)
+
+      const { activeTerminals } = useSessionStore.getState()
+      expect(activeTerminals.has(sub1Id)).toBe(false)
+    })
+
+    it('sets activeSubsessionId when switching to a subsession', async () => {
+      const { switchToSession } = useSessionStore.getState()
+
+      await switchToSession(sub2Id, projectPath, branch, parentId)
+
+      const { activeSubsessionId } = useSessionStore.getState()
+      expect(activeSubsessionId).toBe(sub2Id)
+    })
+
+    it('clears activeSubsessionId when switching to parent', async () => {
+      useSessionStore.setState({ activeSubsessionId: sub1Id })
+
+      const { switchToSession } = useSessionStore.getState()
+      await switchToSession(parentId, projectPath, branch, parentId)
+
+      const { activeSubsessionId } = useSessionStore.getState()
+      expect(activeSubsessionId).toBeNull()
+    })
+
+    it('calls resumeSession on the target', async () => {
+      const { switchToSession } = useSessionStore.getState()
+
+      await switchToSession(sub2Id, projectPath, branch, parentId)
+
+      // resumeSession should call registerResume + terminal.create
+      expect(mockApi.sessions.registerResume).toHaveBeenCalledWith(projectPath)
+      expect(mockApi.terminal.create).toHaveBeenCalledWith(sub2Id, projectPath)
+    })
+
+    it('uses selectedSessionId as parentId when not provided', async () => {
+      useSessionStore.setState({
+        selectedSessionId: parentId,
+        activeTerminals: new Set([parentId])
+      })
+
+      const { switchToSession } = useSessionStore.getState()
+      await switchToSession(sub1Id, projectPath, branch)
+
+      expect(mockApi.terminal.kill).toHaveBeenCalledWith(parentId)
+    })
+  })
+
+  // ── Subsession management ─────────────────────────────────────────────────
+
+  describe('subsession management', () => {
+    const parentId = 'parent-001'
+    const sub1: Session = {
+      id: 'sub-001',
+      projectPath: '/test',
+      projectName: 'test',
+      transcriptPath: '',
+      startedAt: '2026-02-22T10:00:00Z',
+      status: 'active',
+      messageCount: 3,
+      tags: [],
+      source: 'app',
+      parentSessionId: parentId
+    }
+
+    describe('addSubsession', () => {
+      it('adds subsession to the parent record', () => {
+        const { addSubsession } = useSessionStore.getState()
+
+        addSubsession(parentId, sub1)
+
+        const { subsessions } = useSessionStore.getState()
+        expect(subsessions[parentId]).toHaveLength(1)
+        expect(subsessions[parentId][0].id).toBe(sub1.id)
+      })
+
+      it('does not duplicate subsessions', () => {
+        const { addSubsession } = useSessionStore.getState()
+
+        addSubsession(parentId, sub1)
+        addSubsession(parentId, sub1)
+
+        const { subsessions } = useSessionStore.getState()
+        expect(subsessions[parentId]).toHaveLength(1)
+      })
+
+      it('appends to existing subsessions', () => {
+        const sub2: Session = { ...sub1, id: 'sub-002', status: 'completed' }
+        const { addSubsession } = useSessionStore.getState()
+
+        addSubsession(parentId, sub1)
+        addSubsession(parentId, sub2)
+
+        const { subsessions } = useSessionStore.getState()
+        expect(subsessions[parentId]).toHaveLength(2)
+      })
+    })
+
+    describe('selectSubsession', () => {
+      it('sets activeSubsessionId and loads messages', () => {
+        const { selectSubsession } = useSessionStore.getState()
+
+        selectSubsession('sub-001')
+
+        const { activeSubsessionId } = useSessionStore.getState()
+        expect(activeSubsessionId).toBe('sub-001')
+        expect(mockApi.sessions.getMessages).toHaveBeenCalledWith('sub-001')
+      })
+    })
+
+    describe('clearActiveSubsession', () => {
+      it('sets activeSubsessionId to null', () => {
+        useSessionStore.setState({ activeSubsessionId: 'sub-001' })
+
+        const { clearActiveSubsession } = useSessionStore.getState()
+        clearActiveSubsession()
+
+        const { activeSubsessionId } = useSessionStore.getState()
+        expect(activeSubsessionId).toBeNull()
+      })
     })
   })
 })

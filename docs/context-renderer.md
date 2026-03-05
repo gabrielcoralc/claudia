@@ -9,9 +9,10 @@ All files live in `src/renderer/src/`. The renderer is a browser sandbox — no 
 **`main.tsx`** — Mounts `<App />` into `#root`.
 
 **`App.tsx`** — Root component. On mount:
-1. Calls `sessions.resetActive()` to reset all active sessions to completed (prevents phantom active sessions on app restart)
-2. Calls `loadSessions()`, `loadProjects()`, `loadSettings()` from the store
-3. Subscribes to IPC events:
+1. Checks `needsSetup` — if `projectsRootDir` is not configured, shows `SetupWizard` full-screen overlay
+2. Calls `sessions.resetActive()` to reset all active sessions to completed (prevents phantom active sessions on app restart)
+3. Calls `loadSessions()`, `loadProjects()`, `loadSettings()` from the store
+4. Subscribes to IPC events:
    - `event:newSession` → `addSession()`
    - `event:sessionUpdated` → `updateSession()` + auto-invalidates messages if cache is empty but session has messages
    - `event:sessionStarted` → `updateSession()` + if `status === 'active'`: auto-selects the session (terminal is already running from `sessions:launchNew` flow)
@@ -41,6 +42,7 @@ Single Zustand store (`useSessionStore`) holding all global UI state.
   activeTerminals:   Set<string>        // tracks all PTY instances by sessionId
   hiddenTerminals:   Set<string>        // tracks which terminals are hidden (per-terminal visibility)
   sessionActivity:   Record<string, SessionActivity>  // real-time activity per session
+  activeSubsessionId: string | null     // currently selected subsession in SubsessionsTab
 }
 ```
 
@@ -126,6 +128,7 @@ interface AssistantTurn {
 ## Component Tree
 
 ```
+[needsSetup] SetupWizard (full-screen overlay, first-run only)
 App.tsx
  ├── Sidebar.tsx
  │    ├── Toggle: Sessions | Projects
@@ -139,10 +142,12 @@ App.tsx
       └── [session selected] SessionView (inline)
            ├── ChatHeader.tsx
            ├── [active only] SessionControls.tsx
-           ├── Tab bar: Code* | Logs | Session Info | Consumption  (*active-only)
+           ├── TerminalBubble (sticky, shown when terminal hidden)
+           ├── Tab bar: Code* | Logs | Subsessions | Session Info | Consumption  (*active-only)
            ├── [tab content area, left 55% when terminal open]
            │    ├── LogsTab.tsx
            │    ├── CodeTab.tsx         (active sessions only)
+           │    ├── SubsessionsTab.tsx  (shows child sessions from /clear)
            │    ├── SessionInfoTab.tsx
            │    └── ConsumptionTab.tsx
            └── [right 45%, shown when terminalSessionId === session.id]
@@ -260,6 +265,13 @@ Modal dialog for importing external Claude Code sessions (those not started from
 - `GlobalTerminalPanel` — rendered at `MainPanel` level (not inside `SessionView`). Driven by `terminalVisible` from store. Persists across session switches. Shows `TerminalPane` if `terminalSessionId` is set, else placeholder. Has close (×) button.
 - `SessionView` — Tab layout: `Code | Logs | Session Info | Consumption`. Code tab `activeOnly: true`. `+` button opens `NewSessionDialog`.
 
+**`SetupWizard.tsx`** — First-run full-screen overlay shown when `projectsRootDir` is not configured.
+- Folder picker with `FolderOpen` icon and validation
+- Clear button to reset selection
+- Example path hint (e.g., `~/Documents/projects`)
+- "Continue" button disabled until valid directory selected
+- Saves `projectsRootDir` to settings and dismisses overlay
+
 **`WelcomeScreen.tsx`** — Static onboarding screen with `onNewSession` callback prop.
 
 **`NewSessionDialog.tsx`** — Self-contained modal (no `onLaunch` prop).
@@ -339,7 +351,14 @@ Modal dialog for importing external Claude Code sessions (those not started from
 - Collapsible state with smooth transitions
 - Clear visual hierarchy with proper indentation
 
-**`ChatHeader.tsx`** — Session title (editable), status dot, model badge, project name
+**`TerminalBubble.tsx`** — Sticky chat bubble shown at top of chat when terminal is hidden
+- Appears when `hiddenTerminals` contains the current session
+- `terminal-glow` CSS animation with orange-to-green border pulsing effect
+- `ChevronLeft` icon to indicate slide-in action
+- Clicking opens the terminal panel via `toggleTerminalVisible()`
+- Positioned with sticky top inside chat scroll area
+
+**`ChatHeader.tsx`** — Session title (editable), status dot, project name
 - **Terminal toggle button** (lucide `Terminal` icon) — calls `toggleTerminalVisible()`; highlights orange when `terminalVisible === true`
 
 **`CostBar.tsx`** — Cost display bar (used in legacy `ChatView`, not in `LogsTab`)
@@ -362,8 +381,17 @@ Modal dialog for importing external Claude Code sessions (those not started from
 
 ### Session Info
 
+**`SubsessionsTab.tsx`** — Subsession management for `/clear` child sessions
+- Lists child sessions via `sessions:getSubsessions(parentId)`
+- Displays subsession title, status, date, message count, cost
+- Click to navigate to child session (sets `activeSubsessionId`)
+- Delete button with `window.confirm` prompt for inactive subsessions without terminals
+- Loading state with `Loader`/`Trash2` icons during deletion
+- Auto-clears `activeSubsessionId` if deleting currently selected
+- Refreshes list after successful deletion
+
 **`SessionInfoTab.tsx`**
-- Session details grid: Status, Working Directory, Session ID, Created, Updated, Model, Message count, Tags
+- Session details grid: Status, Working Directory, Session ID, Created, Updated, Message count, Tags
 - Tasks list: all `user` role messages (reversed, newest first), shown as cards with status badge (Active if last + session active, else Closed), truncated prompt, collapsible full text
 
 ### Consumption
@@ -399,9 +427,10 @@ Modal dialog for importing external Claude Code sessions (those not started from
 
 **`SettingsPanel.tsx`** — Full-screen modal overlay
 - **Claude Code Integration section**: Hooks Server status (running/stopped), Hook Scripts install/remove
-- **Default Session Options**: Default Model (Opus/Sonnet/Haiku), Permission Mode, Allowed Tools (comma-separated), Claude Executable Path, Projects Root Directory
+- **Default Session Options**: Allowed Tools (comma-separated), Claude Executable Path, Projects Root Directory
 - **UI Preferences**: Show thinking blocks toggle, Auto-scroll toggle
 - Save button calls `updateSettings(local)` which persists to SQLite and refreshes store
+- Note: `defaultModel` and `defaultPermissionMode` removed (unused by Claude CLI)
 
 ---
 

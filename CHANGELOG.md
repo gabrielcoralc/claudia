@@ -73,6 +73,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.1] - 2026-03-04
+
+### 🆕 New Features
+
+#### Added
+- **🔀 Subsession Support (`/clear` command)**
+  - Parent-child session tracking when Claude uses `/clear` during a session
+  - `parent_session_id` column with self-reference in sessions table
+  - SubsessionsTab component to view and navigate child sessions
+  - `sessions:getSubsessions` IPC handler for querying child sessions
+  - `sessions:registerResume` IPC handler to distinguish intentional resumes from `/clear`
+  - `findTerminalByCwd` utility for terminal-to-session matching
+  - Subsession creation logic in HooksServer when `/clear` is detected
+
+- **🗑️ Subsession Deletion**
+  - Delete subsessions with confirmation dialog (`window.confirm`)
+  - Loading state with Loader/Trash2 icons during deletion
+  - Only available for inactive subsessions without active terminals
+  - Auto-clears active subsession selection if deleting current one
+  - Refreshes subsession list after deletion
+
+- **🧙 First-Run Setup Wizard**
+  - Full-screen `SetupWizard` component shown on first launch
+  - Folder picker with validation for projects root directory
+  - `needsSetup` check in `App.tsx` when `projectsRootDir` is not configured
+  - FolderOpen icon, clear button, and example path hint
+  - Disabled "Continue" button until valid directory selected
+
+- **💬 Terminal Visibility Bubble**
+  - Moved terminal toggle from floating button to sticky `TerminalBubble` in chat area
+  - Appears at top of chat when terminal is hidden
+  - `terminal-glow` animation with orange-to-green border pulsing effect
+  - ChevronLeft icon to indicate slide-in action
+  - Updated `MainPanel` layout with relative positioning
+
+### Changed
+- **Removed `model` field** from Session type, database schema, and all UI components
+- **Removed `defaultModel` and `defaultPermissionMode`** from AppSettings (unused by Claude CLI)
+- **Improved Claude CLI path resolution** — `resolveClaudePath` utility with fallback chain: settings → `which` → login shell → common paths (`COMMON_CLAUDE_PATHS` for Homebrew, npm-global, nvm)
+- **Improved model pricing lookup** — prefers longest matching key to prevent shorter generic keys from overriding specific model variants
+- **Simplified session refresh** — replaced 30+ lines with single `processNewTranscript()` invocation
+- **Centralized window management** — new `WindowManager` service with `getMainWindow()` and `sendToRenderer()` utilities; removed direct `BrowserWindow` parameter passing from all services
+
+### Bug Fixes
+- **Token usage deduplication** — `requestId`-based deduplication in SessionParser and FileWatcher prevents counting identical usage from streaming chunks
+- **Cost recalculation migration** — one-time migration to recalculate all session costs using fixed parser (stores flag in `settings` table)
+- **Pricing data validation** — `validatePricingData` sanity checks (output > input, cache_read < input) in PricingService
+- **Dynamic column mapping** — Anthropic pricing table scraping handles layout changes
+
+### Technical
+- Added `WindowManager.ts` service (`getMainWindow()`, `sendToRenderer()`)
+- Added `resolveClaudePath()` utility with `COMMON_CLAUDE_PATHS` fallback array
+- Added `parent_session_id` column to sessions table with migration
+- Added `sessions:getSubsessions` and `sessions:registerResume` IPC handlers
+- Added `findTerminalByCwd()` to TerminalService
+- Added `SetupWizard` component and `TerminalBubble` component
+- Added `SubsessionsTab` component with delete functionality
+- Removed `SubsessionBadge` component
+
+---
+
 ## [0.2.0] - 2026-03-04
 
 ### 🎉 Major Features

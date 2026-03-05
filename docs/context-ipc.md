@@ -34,6 +34,8 @@ window.api = {
                                              Promise<{ success: boolean; error?: string }>
     getDailyMetrics(startDate, endDate, projectFilter?):
                                              Promise<DailyMetric[]>  // analytics daily aggregates
+    getSubsessions(parentId):                Promise<Session[]>     // child sessions from /clear
+    registerResume(sessionId):               Promise<void>          // mark intentional resume vs /clear
   },
 
   projects: {

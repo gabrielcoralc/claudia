@@ -16,7 +16,6 @@ Imported by both main process and renderer. Contains all core interfaces and the
   transcriptPath: string   // absolute path to .jsonl file
   startedAt: string        // ISO — file birthtime
   endedAt?: string         // ISO — set by Stop/SessionEnd hook
-  model: string            // e.g. 'claude-opus-4-5'
   status: SessionStatus    // 'active' | 'completed' | 'paused'
   totalCostUsd?: number
   totalInputTokens?: number
@@ -26,6 +25,7 @@ Imported by both main process and renderer. Contains all core interfaces and the
   title?: string           // user-provided slug name (e.g. 'feat_user_auth')
   branch?: string          // git branch used for this session
   source?: 'app' | 'external'  // 'app' = launched from Claudia; only 'app' shown in UI
+  parentSessionId?: string // parent session ID for subsessions created by /clear
 }
 ```
 
@@ -88,19 +88,20 @@ Note: `cacheReadTokens`/`cacheCreationTokens`/`toolCallCount`/`durationMs` are c
 ```typescript
 {
   defaultAllowedTools: string[]           // e.g. ['Bash', 'Read', 'Edit']
-  defaultPermissionMode: 'default' | 'plan' | 'acceptEdits' | 'bypassPermissions'
-  defaultModel: string                    // default: 'claude-opus-4-5'
   hooksEnabled: boolean                   // default: true
   hooksServerPort: number                 // default: 27182
-  claudeExecutablePath: string            // empty = auto-detect via `which`
+  claudeExecutablePath: string            // empty = auto-detect via resolveClaudePath()
   theme: 'dark' | 'light' | 'system'     // default: 'dark'
   showThinking: boolean                   // default: true
   autoScrollToBottom: boolean             // default: true
-  projectsRootDir: string                 // for NewSessionDialog repo scanner; empty = '~'
+  projectsRootDir: string                 // for NewSessionDialog repo scanner and SetupWizard; empty = '~'
 }
 ```
+Note: `defaultModel` and `defaultPermissionMode` were removed (unused by Claude CLI).
 
 `DEFAULT_SETTINGS` is exported and merged with stored settings on read (protects against missing keys after updates).
+
+> `claudeExecutablePath` resolution: when empty, `resolveClaudePath()` uses a fallback chain: `which` → login shell PATH → `COMMON_CLAUDE_PATHS` (Homebrew, npm-global, nvm).
 
 ### `Project`
 ```typescript
@@ -182,6 +183,8 @@ interface IpcChannels {
   'sessions:scanExternal': (projectPath, branch?) => Session[]  // scan for external .jsonl not in DB
   'sessions:importExternal': (opts: { sessionId, name, branch? }) => { success; error? }
   'sessions:getDailyMetrics': (startDate, endDate, projectFilter?) => DailyMetric[]
+  'sessions:getSubsessions': (parentId) => Session[]  // child sessions from /clear
+  'sessions:registerResume': (sessionId) => void       // mark intentional resume vs /clear
   'projects:list':        () => Project[]
   'settings:get':         () => AppSettings
   'settings:update':      (partial) => void

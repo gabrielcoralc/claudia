@@ -24,6 +24,7 @@ A beautiful macOS desktop application for managing, tracking, and analyzing your
 - **Smart organization** by project and branch
 - **Duplicate prevention** - unique session names per project/branch
 - **Session controls** - Update branch, delete sessions, and more
+- **Subsession tracking** - Automatic parent-child tracking when `/clear` is used
 
 ### 📊 Analytics Dashboard
 - **Interactive charts** - Daily cost trends, project comparison, session distribution
@@ -48,6 +49,7 @@ A beautiful macOS desktop application for managing, tracking, and analyzing your
 - **Session isolation** - Each session has its own terminal instance
 - **Resume sessions** - Pick up where you left off
 - **Multiple terminals** - Run multiple sessions concurrently
+- **Smart terminal bubble** - Sticky chat bubble to toggle terminal visibility with animated glow
 
 ### 🔍 Session Management
 - **Chat history** - Browse complete conversation logs
@@ -62,6 +64,11 @@ A beautiful macOS desktop application for managing, tracking, and analyzing your
 - **Background downloads** - Updates download while you work
 - **Progress tracking** - See download progress and speed
 - **One-click install** - Update in seconds
+
+### 🧙 First-Run Setup Wizard
+- **Guided onboarding** - Projects root directory selection on first launch
+- **Folder picker** with validation and example path hints
+- **Seamless start** - Get up and running in seconds
 
 ### 🎨 Modern UI
 - **Dark theme** optimized for long coding sessions
@@ -177,6 +184,10 @@ See [Building from Source](#-building-from-source) below.
 
 ## 💡 Usage
 
+### First Launch
+
+On first launch, Claudia will show a **Setup Wizard** to configure your projects root directory. Select the folder where your git repositories live and click **Continue**.
+
 ### Starting a New Session
 
 1. Click **"Start New Session"** on the welcome screen
@@ -219,6 +230,9 @@ Claudia will:
   - Command badges for slash commands
   - Plan bubbles for planning phases
   - Interactive question blocks
+- **Subsessions Tab** - View and manage child sessions created by `/clear`
+  - Navigate between parent and child sessions
+  - Delete inactive subsessions with confirmation
 - **Code Tab** - All file modifications (active sessions only)
 - **Session Info** - Metadata, branch, timestamps
 - **Consumption** - Token usage and cost breakdown
@@ -274,7 +288,7 @@ npm run dev
 # Build for Apple Silicon
 npm run package:mac
 
-# Output: dist/Claudia-0.1.0-arm64.dmg
+# Output: dist/Claudia-<version>-arm64.dmg
 ```
 
 **For Intel Macs or Universal Build:**
@@ -327,7 +341,7 @@ Update `package.json`:
 claudia/
 ├── src/
 │   ├── main/              # Electron main process
-│   │   ├── services/      # Database, Terminal, FileWatcher
+│   │   ├── services/      # Database, Terminal, FileWatcher, WindowManager
 │   │   ├── ipc/           # IPC handlers
 │   │   └── index.ts       # Main entry point
 │   ├── preload/           # Preload scripts (IPC bridge)
@@ -413,6 +427,11 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 - [x] Multiple concurrent terminals
 - [x] Real-time activity tracking
 - [x] Enhanced message display
+- [x] Subsession support (`/clear` parent-child tracking)
+- [x] First-run setup wizard
+- [x] Smart terminal bubble toggle
+- [x] Token deduplication and cost recalculation
+- [x] Centralized window management
 
 ### 🚧 In Progress
 - [ ] Session export (backup/sharing)

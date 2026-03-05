@@ -14,11 +14,11 @@ Detailed per-module documentation lives in `docs/`. Read these instead of this f
 
 | File | Covers |
 |---|---|
-| [`docs/context-services.md`](docs/context-services.md) | Database, SessionParser, FileWatcher, HooksServer, TerminalService, **AutoUpdater** |
+| [`docs/context-services.md`](docs/context-services.md) | Database, SessionParser, FileWatcher, HooksServer, TerminalService, **AutoUpdater**, **WindowManager**, **PricingService** |
 | [`docs/context-main-process.md`](docs/context-main-process.md) | Entry point, IPC handlers, claudeHooks setup |
 | [`docs/context-ipc.md`](docs/context-ipc.md) | Preload bridge, full `window.api` surface, all IPC event channels |
-| [`docs/context-renderer.md`](docs/context-renderer.md) | Zustand store, messageGrouper, all React components including **Analytics**, **ImportSessionDialog**, **QuestionBlock**, **PlanBubble**, **CommandBadge** |
-| [`docs/context-types.md`](docs/context-types.md) | All shared TypeScript interfaces including **SessionActivity**, **DailyMetric**, **UpdateInfo** |
+| [`docs/context-renderer.md`](docs/context-renderer.md) | Zustand store, messageGrouper, all React components including **Analytics**, **ImportSessionDialog**, **QuestionBlock**, **PlanBubble**, **CommandBadge**, **SetupWizard**, **SubsessionsTab**, **TerminalBubble** |
+| [`docs/context-types.md`](docs/context-types.md) | All shared TypeScript interfaces including **SessionActivity**, **DailyMetric**, **UpdateInfo** (note: `model` field removed from Session) |
 | [`docs/claude-code-session-format.md`](docs/claude-code-session-format.md) | Claude Code JSONL transcript format reference |
 
 ---
@@ -148,14 +148,16 @@ User clicks Import Session in WelcomeScreen
 
 | File | Responsibility |
 |---|---|
-| `index.ts` | Window creation, startup sequence (IPC → HooksServer → FileWatcher → AutoUpdater), before-quit cleanup |
+| `index.ts` | Window creation, startup sequence (IPC → HooksServer → FileWatcher → AutoUpdater), before-quit cleanup, **setup wizard** detection |
 | `services/Database.ts` | SQLite (`claudia.db`): `sessionDb`, `messageDb`, `projectDb`, `settingsDb` namespaces |
-| `services/SessionParser.ts` | Parses JSONL transcripts → `ClaudeMessage[]`; `scanClaudeProjects()`, `decodeProjectPath()`, incremental parsing |
+| `services/SessionParser.ts` | Parses JSONL transcripts → `ClaudeMessage[]`; `scanClaudeProjects()`, `decodeProjectPath()`, incremental parsing, **requestId-based deduplication** |
 | `services/FileWatcher.ts` | chokidar watcher (no startup import); `pendingLaunches` map; tracks `lastLineCount` per file; external session scanning |
 | `services/HooksServer.ts` | HTTP server on `:27182`; handles `SessionStart` (with retry), `Stop`, `Notification` hooks |
-| `services/TerminalService.ts` | node-pty management (lazy-loaded); git CLI helpers (`getLastCommitDiff`, `stashChanges`, etc.); multiple concurrent terminals |
+| `services/TerminalService.ts` | node-pty management (lazy-loaded); git CLI helpers (`getLastCommitDiff`, `stashChanges`, etc.); multiple concurrent terminals; **`findTerminalByCwd()`** |
+| `services/WindowManager.ts` | Centralized window management; `getMainWindow()`, `sendToRenderer()` — replaces direct BrowserWindow passing |
+| `services/PricingService.ts` | Model pricing with web scraping from Anthropic + fallback to cached rates; longest-match key lookup; `validatePricingData()` |
 | `services/AutoUpdater.ts` | electron-updater integration; checks GitHub releases every 4h; downloads + installs updates; progress tracking |
-| `ipc/handlers.ts` | All `ipcMain.handle()` registrations; `claude:launch` subprocess; `git:reviewWithClaude` one-shot; import/analytics APIs |
+| `ipc/handlers.ts` | All `ipcMain.handle()` registrations; `claude:launch` subprocess; `git:reviewWithClaude` one-shot; import/analytics APIs; **`sessions:getSubsessions`**, **`sessions:registerResume`**; uses `resolveClaudePath()` for CLI resolution |
 | `setup/claudeHooks.ts` | Writes `~/.claude/claudia-bridge.sh` + installs it in `~/.claude/settings.json` |
 
 ---
@@ -197,6 +199,7 @@ settings · isLoading · sidebarView
 activeTerminals: Set<string>      // tracks all PTY instances by sessionId
 hiddenTerminals: Set<string>      // tracks which terminals are hidden (per-terminal visibility)
 sessionActivity: Record<string, SessionActivity>  // real-time activity per session
+activeSubsessionId: string | null // currently selected subsession
 ```
 **Multiple concurrent terminals** — each session can have its own terminal, tracked independently.
 
@@ -216,6 +219,7 @@ sessionActivity: Record<string, SessionActivity>  // real-time activity per sess
 
 **Component tree** (overview):
 ```
+[needsSetup] SetupWizard (full-screen overlay, first-run only)
 App.tsx  [event listeners: newSession, sessionUpdated, sessionStarted,
           sessionReplaced, terminalLinked, messageAdded]
  ├── Sidebar.tsx (sessions/projects toggle, search, SessionItem, SettingsPanel modal)
@@ -225,13 +229,17 @@ App.tsx  [event listeners: newSession, sessionUpdated, sessionStarted,
       │    └── [session selected] SessionView
       │         ├── ChatHeader (+ terminal toggle button)
       │         ├── SessionControls (active only: Resume + Rollback)
-      │         └── Tabs: Code* | Logs | Session Info | Consumption
+      │         ├── TerminalBubble (sticky, shown when terminal hidden)
+      │         └── Tabs: Code* | Logs | Subsessions | Session Info | Consumption
       └── [right, 45%] GlobalTerminalPanel (shown when terminalVisible=true)
            └── TerminalPane (xterm.js)
 ```
 `*` = active sessions only
 
 **Key components**:
+- `SetupWizard` — first-run full-screen overlay for projects root directory selection with folder picker and validation
+- `TerminalBubble` — sticky chat bubble at top of chat when terminal is hidden; `terminal-glow` animation with orange-to-green border pulsing
+- `SubsessionsTab` — lists child sessions created by `/clear`; delete subsessions with confirmation; navigate between parent/child sessions
 - `AssistantTurnBubble` — renders grouped thinking/tool/text blocks with `react-markdown` + syntax highlighting; now includes `QuestionBlock`, `PlanBubble`, `CommandBadge`
 - `QuestionBlock` — renders `AskUserQuestion` tool calls as interactive question cards with multiple-choice UI
 - `PlanBubble` — renders `ExitPlanMode` output as collapsible plan summaries with file lists
@@ -313,7 +321,13 @@ The postinstall script (`electron-rebuild -f -w better-sqlite3,node-pty`) runs a
 
 10. **SQLite WAL mode**: Allows concurrent reads while writing, important because the file watcher and IPC handlers can both access the database simultaneously.
 
-11. **Import feature (Phase 2 — not yet built)**: `scanClaudeProjects()` and `importExistingSessions()` in `FileWatcher.ts`/`SessionParser.ts` are preserved but not called at startup. Future "Import Session" button will use them to bring external sessions in with a user-provided name.
+11. **Import feature**: `scanClaudeProjects()` and `importExistingSessions()` in `FileWatcher.ts`/`SessionParser.ts` power the Import Session wizard. External sessions are scanned, validated, and imported with user-provided names.
+
+12. **Subsession tracking**: When Claude uses `/clear`, a new child session is created with `parent_session_id` pointing to the original session. HooksServer detects `/clear` via `findTerminalByCwd()` and creates the subsession relationship. `sessions:registerResume` distinguishes intentional resumes from `/clear`-triggered new sessions.
+
+13. **WindowManager pattern**: All services use `WindowManager.sendToRenderer()` instead of receiving `BrowserWindow` as a parameter. This centralizes window reference management and simplifies service APIs.
+
+14. **Claude CLI resolution**: `resolveClaudePath()` uses a fallback chain: user settings → `which` → login shell PATH → `COMMON_CLAUDE_PATHS` (Homebrew, npm-global, nvm locations). This ensures Claude is found regardless of how it was installed.
 
 ---
 
@@ -326,4 +340,6 @@ The postinstall script (`electron-rebuild -f -w better-sqlite3,node-pty`) runs a
 - **The `messages` map in the store is keyed by `sessionId`** — the lazy-load guard (`if (existing) return`) means messages won't refresh if you re-select a session. The store now auto-detects empty cache on `event:sessionUpdated` and calls `invalidateMessages()` to force reload when needed.
 - **Session status** is only set to `active` when a `SessionStart` hook fires. Without hooks installed, all sessions appear as `completed` even if Claude is currently running. Active sessions are auto-selected in the UI via `event:sessionStarted` listener.
 - **`decodeProjectPath`** does filesystem I/O (greedy `fs.existsSync` walk) — it's only called at scan time, not on hot paths.
-- **The `which` package** is used to find the `claude` binary in PATH when no explicit path is configured in settings.
+- **`resolveClaudePath()`** uses a multi-step fallback chain (settings → `which` → login shell → common paths) to find the `claude` binary. The `which` package is one step in this chain.
+- **`parent_session_id`** column in sessions table enables subsession tracking. Sessions created by `/clear` have their parent set automatically. The `SubsessionsTab` component queries children via `sessions:getSubsessions`.
+- **Token deduplication** — SessionParser and FileWatcher use `requestId` to prevent counting identical usage from streaming JSONL entries that share the same API request.

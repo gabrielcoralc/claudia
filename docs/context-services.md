@@ -12,9 +12,11 @@ SQLite via `better-sqlite3`. DB file: `app.getPath('userData')/claudia.db`.
 
 ```sql
 sessions  — id, project_path, project_name, transcript_path, started_at, ended_at,
-             model, status, total_cost_usd, total_input_tokens, total_output_tokens,
+             status, total_cost_usd, total_input_tokens, total_output_tokens,
+             cache_read_tokens, cache_creation_tokens,
              message_count, title, tags (JSON string),
              source TEXT NOT NULL DEFAULT 'app',   ← added via migration-safe ALTER TABLE
+             parent_session_id TEXT REFERENCES sessions(id) ON DELETE SET NULL,  ← subsession tracking
              created_at
 messages  — id, session_id FK→sessions, role, content (JSON string), timestamp, usage (JSON string)
 settings  — key TEXT PK, value TEXT (single row: key='app_settings')
@@ -28,9 +30,10 @@ Pragmas: `journal_mode = WAL`, `foreign_keys = ON`. Messages use `ON DELETE CASC
 **`sessionDb`**
 - `upsert(session)` — INSERT OR REPLACE; also upserts into `projects`; includes `source` column
 - `getById(id)`, `list()` — `list()` filters `WHERE source = 'app'`, ordered by `started_at DESC`
+- `getSubsessions(parentId)` — returns child sessions where `parent_session_id = parentId`
 - `delete(id)`, `updateTitle(id, title)`, `updateTags(id, tags[])`
 - `updateStatus(id, status, endedAt?)` — called by FileWatcher lifecycle helpers
-- `updateCost(id, summary)` — updates cost/token columns
+- `updateCost(id, summary)` — updates cost/token columns (includes cache tokens)
 - `incrementMessageCount(id)` — atomic +1
 - `updateProjectPath(id, projectPath, projectName)` — repairs stale path from old decoding
 
@@ -80,9 +83,13 @@ First 60 chars of first user message text block.
 **`parseStreamJsonLine(line)`** → `TranscriptEntry | null`  
 Safe JSON.parse wrapper for streaming event lines.
 
-### Cost model (hardcoded)
-- Opus: $15/M input, $75/M output
-- Sonnet/other: $3/M input, $15/M output
+### Token deduplication
+
+Streaming JSONL entries can produce multiple entries with the same `requestId` but different usage snapshots. SessionParser deduplicates by tracking seen `requestId` values and only counting usage from the final entry for each request. This prevents inflated token counts.
+
+### Cost model
+
+Cost calculation is delegated to `PricingService.ts` which uses longest-match key lookup against model names. See `PricingService.ts` section below.
 
 ---
 
@@ -108,9 +115,10 @@ Registered when the user launches a session from the dialog; consumed by HooksSe
 
 ### Lifecycle
 
-**`startFileWatcher(win)`**
+**`startFileWatcher()`**
 1. Starts chokidar watcher with `ignoreInitial: true`, `usePolling: true, interval: 2000` — **no startup import of existing sessions**; polling mode for better compatibility across file systems
 2. Binds `onFileAdded` and `onFileChanged` handlers
+3. Uses `WindowManager.sendToRenderer()` instead of direct `win` parameter
 
 > `importExistingSessions()` is preserved in the file but not called. It will be used by the Phase 2 Import feature.
 
@@ -118,11 +126,11 @@ Registered when the user launches a session from the dialog; consumed by HooksSe
 
 ### File event handlers
 
-**`onFileAdded(filePath, win)`** — called when a new `.jsonl` appears  
+**`onFileAdded(filePath)`** — called when a new `.jsonl` appears  
 Reads `cwd` from first entry, calls `processNewTranscript()`.
 
-**`onFileChanged(filePath, win)`** — called when a known file grows  
-Reads only `messages.slice(watched.lastLineCount)` (new lines only), inserts them, updates cost, sends `event:messageAdded` and `event:sessionUpdated` to renderer.
+**`onFileChanged(filePath)`** — called when a known file grows  
+Reads only `messages.slice(watched.lastLineCount)` (new lines only), inserts them, updates cost with `requestId`-based deduplication, sends `event:messageAdded` and `event:sessionUpdated` to renderer.
 
 **`processNewTranscript(sessionId, projectPath, transcriptPath, win)`** — full parse
 - Parses transcript file to extract messages, costSummary, cwd, and gitBranch
@@ -142,8 +150,8 @@ For Phase 2 (Import feature). For each session from `scanClaudeProjects()`:
 
 - `markSessionActive(sessionId)` — `sessionDb.updateStatus(id, 'active')`
 - `markSessionCompleted(sessionId)` — `sessionDb.updateStatus(id, 'completed', now)`
-- `refreshSession(sessionId, win)` — re-runs `onFileChanged` for the session's transcript
-- `forceProcessSession(sessionId, win)` — scans for a not-yet-watched session and processes it
+- `refreshSession(sessionId)` — calls `processNewTranscript()` for a full re-parse of the session's transcript (simplified from 30+ lines to single invocation)
+- `forceProcessSession(sessionId)` — scans for a not-yet-watched session and processes it
 
 ---
 
@@ -166,8 +174,11 @@ Calls `markSessionCompleted()`, then `refreshSession()` to pull final messages, 
 **`Notification`**  
 Forwards `{sessionId, message}` as `event:notification` to renderer.
 
+**Subsession detection (`/clear` command)**  
+When a `SessionStart` hook fires and `findTerminalByCwd(cwd)` finds an existing terminal for that project path, HooksServer checks if this is an intentional resume (via `sessions:registerResume`) or a `/clear`-triggered new session. If `/clear` is detected, the new session is created with `parent_session_id` pointing to the original session.
+
 ### Exported API
-- `startHooksServer(win, port)` — idempotent (returns early if already running)
+- `startHooksServer(port)` — idempotent (returns early if already running); uses `WindowManager.sendToRenderer()`
 - `stopHooksServer()`
 - `isHooksServerRunning()` → boolean
 
@@ -187,7 +198,8 @@ Internal: `terminals: Map<sessionId, { proc: IPty, cwd: string }>`
 
 **Multiple concurrent terminals supported** — each session can have its own PTY instance. The renderer tracks active terminals via `activeTerminals: Set<string>` and visibility via `hiddenTerminals: Set<string>`.
 
-- **`createTerminal(sessionId, cwd, win)`** — spawns `$SHELL` (default `/bin/zsh`) with `xterm-256color` at 120×36. Streams PTY output as `event:terminal:data`. On exit, emits `event:terminal:exit` for renderer cleanup. **Does NOT kill existing terminal** — caller must explicitly kill if needed (allows multiple terminals per session if desired, though UI currently limits to one).
+- **`createTerminal(sessionId, cwd)`** — spawns `$SHELL` (default `/bin/zsh`) with `xterm-256color` at 120×36. Streams PTY output as `event:terminal:data` via `WindowManager.sendToRenderer()`. On exit, emits `event:terminal:exit` for renderer cleanup. **Does NOT kill existing terminal** — caller must explicitly kill if needed (allows multiple terminals per session if desired, though UI currently limits to one).
+- **`findTerminalByCwd(cwd)`** → `{ sessionId, proc, cwd } | undefined` — finds a terminal whose `cwd` matches the given path. Used by HooksServer to detect subsession relationships when `/clear` is used.
 - **`writeTerminal(sessionId, data)`** — forwards keystrokes to PTY
 - **`resizeTerminal(sessionId, cols, rows)`** — PTY resize on DOM resize
 - **`killTerminal(sessionId)`** — kills PTY, removes from map, triggers `event:terminal:exit`
@@ -309,3 +321,40 @@ All updater errors are caught and emitted as `event:update:error`:
 - Updates are only checked for published GitHub releases
 - Delta updates not supported (full app download each time)
 - macOS Gatekeeper may block updates from unsigned builds (user must approve)
+
+---
+
+## `WindowManager.ts`
+
+Centralized window management service. Replaces direct `BrowserWindow` parameter passing across all services.
+
+### Exported API
+
+- **`setMainWindow(win: BrowserWindow)`** — stores the main window reference. Called once during app initialization in `index.ts`.
+- **`getMainWindow()`** → `BrowserWindow | null` — returns the stored main window reference.
+- **`sendToRenderer(channel: string, ...args: unknown[])`** — sends an IPC event to the renderer via `win.webContents.send()`. No-ops if window is null or destroyed.
+
+### Usage Pattern
+
+All services (`FileWatcher`, `HooksServer`, `AutoUpdater`, `TerminalService`) import `sendToRenderer()` directly instead of receiving a `BrowserWindow` parameter. This simplifies function signatures and eliminates parameter threading.
+
+---
+
+## `PricingService.ts`
+
+Handles model pricing with dynamic data fetching and cached fallback rates.
+
+### Pricing Data Sources
+
+1. **Web scraping** — Fetches current pricing from Anthropic's pricing page using `cheerio`. Dynamic column mapping handles layout changes.
+2. **Cached fallback** — `src/shared/pricing.json` contains hardcoded rates used when scraping fails.
+
+### Key Functions
+
+- **`getCostForModel(model, inputTokens, outputTokens, cacheReadTokens?, cacheCreationTokens?)`** → `number` — calculates cost in USD. Uses **longest-match key lookup** to find the most specific pricing entry for a model name (prevents shorter generic keys from overriding specific variants).
+- **`validatePricingData(data)`** → `boolean` — sanity checks: output price > input price, cache_read < input price. Rejects obviously wrong scraped data.
+- **`refreshPricing()`** → `Promise<void>` — re-scrapes pricing data from Anthropic. Called periodically or on demand.
+
+### Longest-Match Key Lookup
+
+When looking up pricing for a model like `claude-sonnet-4-20250514`, the service iterates all pricing keys and selects the one with the longest match length. This ensures `claude-sonnet-4-20250514` matches its specific entry rather than a generic `claude-sonnet` key.
