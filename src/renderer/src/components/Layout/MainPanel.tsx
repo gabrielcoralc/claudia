@@ -462,14 +462,12 @@ export default function MainPanel(): React.JSX.Element {
 
       {/* Main content area with terminal */}
       <div className="flex-1 flex flex-row overflow-hidden relative">
-        {viewMode === 'sessions' ? (
-          <>
-            <div className={`flex flex-col overflow-hidden ${isTerminalVisible ? 'w-[55%]' : 'flex-1'}`}>{content}</div>
-            <GlobalTerminalPanel />
-          </>
-        ) : (
-          <AnalyticsPanel />
-        )}
+        {/* Always render sessions + terminal so xterm instances stay mounted */}
+        <div className={`flex flex-row overflow-hidden ${viewMode === 'sessions' ? 'flex-1' : 'hidden'}`}>
+          <div className={`flex flex-col overflow-hidden ${isTerminalVisible ? 'w-[55%]' : 'flex-1'}`}>{content}</div>
+          <GlobalTerminalPanel />
+        </div>
+        {viewMode === 'analytics' && <AnalyticsPanel />}
       </div>
     </div>
   )
