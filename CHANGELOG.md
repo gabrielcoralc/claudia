@@ -19,6 +19,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.1] - 2026-03-06
+
+### Bug Fixes
+- **Terminal persistence on view switch** — Fixed terminal panes turning black when switching between Sessions and Analytics views. Now uses CSS visibility instead of conditional rendering to keep xterm instances mounted.
+- **AskUserQuestion rendering in live sessions** — Fixed interactive questions showing as raw "Used 1 tool AskUserQuestion" during real-time sessions. The incremental parser (`parseNewLinesOnly`) now applies `transformAskUserQuestion` and `toolUseResult` attachment, matching the full parser behavior.
+
+### Documentation
+- Added `.eslintignore` for build outputs, dependencies, and generated files
+- Updated `context-services.md` with incremental parser transform details
+- Fixed stale `QuestionBlock.tsx` reference in `context-renderer.md`
+
+### Tests
+- Added 4 unit tests for `transformAskUserQuestion` covering real JSONL format, passthrough, missing input, and multiSelect scenarios
+
+---
+
 ## [1.0.0] - 2026-03-06
 
 ### 🎉 First Official Release
