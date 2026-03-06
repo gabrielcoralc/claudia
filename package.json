@@ -1,6 +1,6 @@
 {
   "name": "claudia",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "A macOS UI for Claude Code - visual session management, chat history, and cost tracking",
   "main": "./out/main/index.js",
   "author": "gabrielcoral",
