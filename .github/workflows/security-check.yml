@@ -22,13 +22,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       - name: Configure npm registry
         run: npm config set registry https://registry.npmjs.org/
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          rm -f package-lock.json
+          npm install
 
       - name: Run security audit (production dependencies)
         run: npm run security:audit
@@ -49,13 +50,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       - name: Configure npm registry
         run: npm config set registry https://registry.npmjs.org/
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          rm -f package-lock.json
+          npm install
 
       - name: Run ESLint
         run: npm run lint
@@ -75,13 +77,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       - name: Configure npm registry
         run: npm config set registry https://registry.npmjs.org/
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          rm -f package-lock.json
+          npm install
 
       - name: Run tests
         run: npm test
