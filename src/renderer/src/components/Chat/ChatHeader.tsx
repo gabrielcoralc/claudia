@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Edit2, Check, X } from 'lucide-react'
+import { Edit2, Check, X, Layers } from 'lucide-react'
 import { useSessionStore } from '../../stores/sessionStore'
 import type { Session } from '../../../../shared/types'
 
@@ -8,7 +8,9 @@ interface Props {
 }
 
 export default function ChatHeader({ session }: Props): React.JSX.Element {
-  const { updateSessionTitle } = useSessionStore()
+  const { updateSessionTitle, subsessions } = useSessionStore()
+  const subs = subsessions[session.id] ?? []
+  const subsessionCount = subs.length
   const [editing, setEditing] = useState(false)
   const [titleValue, setTitleValue] = useState(session.title ?? '')
 
@@ -55,7 +57,10 @@ export default function ChatHeader({ session }: Props): React.JSX.Element {
               {session.title ?? `Session ${session.id.slice(0, 8)}`}
             </span>
             <button
-              onClick={() => { setTitleValue(session.title ?? ''); setEditing(true) }}
+              onClick={() => {
+                setTitleValue(session.title ?? '')
+                setEditing(true)
+              }}
               className="text-claude-muted hover:text-claude-text p-1 opacity-0 group-hover:opacity-100 transition-opacity"
             >
               <Edit2 size={12} />
@@ -66,22 +71,28 @@ export default function ChatHeader({ session }: Props): React.JSX.Element {
 
       <div className="no-drag flex items-center gap-3 shrink-0">
         <div className="flex items-center gap-1.5">
-          <div className={`w-1.5 h-1.5 rounded-full ${
-            session.status === 'active' ? 'bg-green-400 animate-pulse' :
-            session.status === 'paused' ? 'bg-yellow-400' : 'bg-claude-muted'
-          }`} />
-          <span className={`text-xs ${statusColors[session.status]}`}>
-            {session.status}
-          </span>
+          <div
+            className={`w-1.5 h-1.5 rounded-full ${
+              session.status === 'active'
+                ? 'bg-green-400 animate-pulse'
+                : session.status === 'paused'
+                  ? 'bg-yellow-400'
+                  : 'bg-claude-muted'
+            }`}
+          />
+          <span className={`text-xs ${statusColors[session.status]}`}>{session.status}</span>
         </div>
-
-        <span className="text-xs text-claude-muted border border-claude-border px-2 py-0.5 rounded-full">
-          {session.model.includes('opus') ? 'Opus' : session.model.includes('sonnet') ? 'Sonnet' : session.model}
-        </span>
 
         <span className="text-xs text-claude-muted truncate max-w-32" title={session.projectPath}>
           {session.projectName}
         </span>
+
+        {subsessionCount > 0 && (
+          <span className="flex items-center gap-1 text-xs text-claude-muted bg-claude-hover px-1.5 py-0.5 rounded">
+            <Layers size={10} />
+            {subsessionCount}
+          </span>
+        )}
       </div>
     </div>
   )

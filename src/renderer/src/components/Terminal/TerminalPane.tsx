@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
@@ -13,15 +13,6 @@ export default function TerminalPane({ sessionId }: Props): React.JSX.Element {
   const fitRef = useRef<FitAddon | null>(null)
   const cleanupRef = useRef<(() => void) | null>(null)
 
-  const fit = useCallback(() => {
-    if (!fitRef.current || !termRef.current) return
-    try {
-      fitRef.current.fit()
-      const { cols, rows } = termRef.current
-      window.api.terminal.resize(sessionId, cols, rows)
-    } catch {}
-  }, [sessionId])
-
   useEffect(() => {
     if (!containerRef.current) return
 
@@ -32,14 +23,14 @@ export default function TerminalPane({ sessionId }: Props): React.JSX.Element {
         cursor: '#D97757',
         selectionBackground: '#D9775740',
         black: '#1a1a1a',
-        brightBlack: '#4d4d4d',
+        brightBlack: '#4d4d4d'
       },
       fontFamily: 'SF Mono, JetBrains Mono, Fira Code, monospace',
       fontSize: 13,
       lineHeight: 1.4,
       cursorBlink: true,
       allowTransparency: true,
-      scrollback: 5000,
+      scrollback: 5000
     })
 
     const fitAddon = new FitAddon()

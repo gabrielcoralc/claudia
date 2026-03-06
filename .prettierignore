@@ -1,0 +1,9 @@
+node_modules
+dist
+out
+build
+.next
+.cache
+*.log
+package-lock.json
+.git

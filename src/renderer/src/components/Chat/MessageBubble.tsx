@@ -1,6 +1,8 @@
 import React from 'react'
 import { User } from 'lucide-react'
 import type { ClaudeMessage } from '../../../../shared/types'
+import { detectCommand } from '../../../../shared/utils/commandDetector'
+import CommandBadge from './CommandBadge'
 
 interface Props {
   message: ClaudeMessage
@@ -9,6 +11,12 @@ interface Props {
 // ─── User message bubble ──────────────────────────────────────────────────────
 
 export default function MessageBubble({ message }: Props): React.JSX.Element | null {
+  // Check if this is a command message — render as a compact badge
+  const command = detectCommand(message.content)
+  if (command) {
+    return <CommandBadge command={command} />
+  }
+
   const textBlocks = message.content.filter(
     (b): b is import('../../../../shared/types').ClaudeTextContent =>
       b.type === 'text' && (b as { type: 'text'; text: string }).text.trim().length > 0

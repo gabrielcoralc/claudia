@@ -2,7 +2,7 @@ import type {
   ClaudeMessage,
   ClaudeThinkingContent,
   ClaudeToolUseContent,
-  ClaudeToolResultContent,
+  ClaudeToolResultContent
 } from '../../../shared/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -18,6 +18,7 @@ export type AssistantContentGroup =
   | { kind: 'thinking'; blocks: ClaudeThinkingContent[] }
   | { kind: 'tools'; pairs: ToolPair[] }
   | { kind: 'text'; text: string; isInteractiveQuestion?: boolean }
+  | { kind: 'plan'; plan: string }
 
 export interface UserTurn {
   kind: 'user'
@@ -33,7 +34,17 @@ export interface AssistantTurn {
   isQuestion?: boolean
 }
 
-export type ConversationTurn = UserTurn | AssistantTurn
+export interface QuestionAnswerEntry {
+  question: string
+  answer: string
+}
+
+export interface QuestionAnswerTurn {
+  kind: 'question_answer'
+  answers: QuestionAnswerEntry[]
+}
+
+export type ConversationTurn = UserTurn | AssistantTurn | QuestionAnswerTurn
 
 // ─── Classifier ───────────────────────────────────────────────────────────────
 
@@ -72,9 +83,15 @@ function appendAssistantBlocks(
       } else {
         groups.push({ kind: 'thinking', blocks: [block as ClaudeThinkingContent] })
       }
-
     } else if (block.type === 'tool_use') {
       const toolUse = block as ClaudeToolUseContent
+
+      // ExitPlanMode contains a plan in input.plan — render as dedicated plan bubble
+      if (toolUse.name === 'ExitPlanMode' && typeof toolUse.input.plan === 'string') {
+        groups.push({ kind: 'plan', plan: toolUse.input.plan })
+        continue
+      }
+
       const pair: ToolPair = {
         toolUse,
         toolResult: toolResults.get(toolUse.id)
@@ -85,7 +102,6 @@ function appendAssistantBlocks(
       } else {
         groups.push({ kind: 'tools', pairs: [pair] })
       }
-
     } else if (block.type === 'text') {
       const rawText = (block as { type: 'text'; text: string }).text
       const isInteractive = rawText.startsWith('<!-- interactive-question -->')
@@ -107,10 +123,7 @@ function appendAssistantBlocks(
  * Attach tool results from a tool_result_user message to the pending ToolPair
  * entries in the current assistant turn's groups.
  */
-function attachToolResults(
-  groups: AssistantContentGroup[],
-  msg: ClaudeMessage
-): void {
+function attachToolResults(groups: AssistantContentGroup[], msg: ClaudeMessage): void {
   for (const block of msg.content) {
     if (block.type !== 'tool_result') continue
     const result = block as ClaudeToolResultContent
@@ -173,14 +186,23 @@ export function groupMessages(messages: ClaudeMessage[]): ConversationTurn[] {
       appendAssistantBlocks(pendingAssistant.groups, msg, new Map())
       // Track the latest usage (last assistant entry in the turn has the totals)
       if (msg.usage) pendingAssistant.usage = msg.usage
-
     } else if (kind === 'tool_result_user') {
       // Attach results to pending tool pairs in the current assistant turn
       if (pendingAssistant) {
         attachToolResults(pendingAssistant.groups, msg)
       }
-      // Do NOT flush — more assistant entries may follow
 
+      // Check for AskUserQuestion answers and emit a QuestionAnswerTurn
+      const qaEntries = extractQuestionAnswers(msg)
+      if (qaEntries.length > 0) {
+        // Flush the assistant turn first so the question appears before the answer
+        if (pendingAssistant) {
+          markQuestionIfNeeded(pendingAssistant)
+        }
+        flushAssistant()
+        turns.push({ kind: 'question_answer', answers: qaEntries })
+      }
+      // Do NOT flush — more assistant entries may follow
     } else {
       // real_user — mark the previous assistant turn as a question if its last text ends with '?'
       if (pendingAssistant) {
@@ -213,4 +235,26 @@ function markQuestionIfNeeded(turn: AssistantTurn): void {
       return
     }
   }
+}
+
+/**
+ * Extract question-answer pairs from a tool_result_user message that contains
+ * AskUserQuestion answers in the toolUseResult field.
+ */
+function extractQuestionAnswers(msg: ClaudeMessage): QuestionAnswerEntry[] {
+  const entries: QuestionAnswerEntry[] = []
+  for (const block of msg.content) {
+    if (block.type !== 'tool_result') continue
+    const result = block as ClaudeToolResultContent
+    const data = result.toolUseResult
+    if (!data || typeof data !== 'object') continue
+    const answers = data.answers as Record<string, string> | undefined
+    if (!answers || typeof answers !== 'object') continue
+    for (const [question, answer] of Object.entries(answers)) {
+      if (typeof answer === 'string' && answer.trim()) {
+        entries.push({ question, answer })
+      }
+    }
+  }
+  return entries
 }

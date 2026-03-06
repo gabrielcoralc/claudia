@@ -9,9 +9,10 @@ All files live in `src/renderer/src/`. The renderer is a browser sandbox — no 
 **`main.tsx`** — Mounts `<App />` into `#root`.
 
 **`App.tsx`** — Root component. On mount:
-1. Calls `sessions.resetActive()` to reset all active sessions to completed (prevents phantom active sessions on app restart)
-2. Calls `loadSessions()`, `loadProjects()`, `loadSettings()` from the store
-3. Subscribes to IPC events:
+1. Checks `needsSetup` — if `projectsRootDir` is not configured, shows `SetupWizard` full-screen overlay
+2. Calls `sessions.resetActive()` to reset all active sessions to completed (prevents phantom active sessions on app restart)
+3. Calls `loadSessions()`, `loadProjects()`, `loadSettings()` from the store
+4. Subscribes to IPC events:
    - `event:newSession` → `addSession()`
    - `event:sessionUpdated` → `updateSession()` + auto-invalidates messages if cache is empty but session has messages
    - `event:sessionStarted` → `updateSession()` + if `status === 'active'`: auto-selects the session (terminal is already running from `sessions:launchNew` flow)
@@ -41,6 +42,7 @@ Single Zustand store (`useSessionStore`) holding all global UI state.
   activeTerminals:   Set<string>        // tracks all PTY instances by sessionId
   hiddenTerminals:   Set<string>        // tracks which terminals are hidden (per-terminal visibility)
   sessionActivity:   Record<string, SessionActivity>  // real-time activity per session
+  activeSubsessionId: string | null     // currently selected subsession in SubsessionsTab
 }
 ```
 
@@ -75,6 +77,14 @@ Single Zustand store (`useSessionStore`) holding all global UI state.
 **`setSessionActivity(sessionId, activity | null)`** — Updates sessionActivity map. Auto-cleared after 10s via timeout in App.tsx event listener.
 
 **`addSession(session)`** — Deduplicates by id before prepending.
+
+### Session import & analytics actions
+
+**`scanExternalSessions(projectPath, branch?)`** — Scans `~/.claude/projects/` for external .jsonl files not yet in DB. Returns array of external sessions with metadata (title, date, message count, cost). Used by `ImportSessionDialog` step 3.
+
+**`importExternalSession(sessionId, name, branch?)`** — Imports an external session by marking it as `source='app'` in DB, assigning the user-provided name, and starting file watch. Used by `ImportSessionDialog` step 4.
+
+**`getDailyMetrics(startDate, endDate, projectFilter?)`** — Fetches daily aggregated metrics (cost, tokens, session count) for analytics dashboard. Returns array of `DailyMetric` objects grouped by date.
 
 ---
 
@@ -118,6 +128,7 @@ interface AssistantTurn {
 ## Component Tree
 
 ```
+[needsSetup] SetupWizard (full-screen overlay, first-run only)
 App.tsx
  ├── Sidebar.tsx
  │    ├── Toggle: Sessions | Projects
@@ -131,15 +142,111 @@ App.tsx
       └── [session selected] SessionView (inline)
            ├── ChatHeader.tsx
            ├── [active only] SessionControls.tsx
-           ├── Tab bar: Code* | Logs | Session Info | Consumption  (*active-only)
+           ├── TerminalBubble (sticky, shown when terminal hidden)
+           ├── Tab bar: Code* | Logs | Subsessions | Session Info | Consumption  (*active-only)
            ├── [tab content area, left 55% when terminal open]
            │    ├── LogsTab.tsx
            │    ├── CodeTab.tsx         (active sessions only)
+           │    ├── SubsessionsTab.tsx  (shows child sessions from /clear)
            │    ├── SessionInfoTab.tsx
            │    └── ConsumptionTab.tsx
            └── [right 45%, shown when terminalSessionId === session.id]
                 └── TerminalPane.tsx
 ```
+
+---
+
+## Analytics
+
+Analytics system for tracking session costs, token usage, and trends over time.
+
+### `AnalyticsPanel.tsx` — Full analytics dashboard
+
+Main analytics view with three visualization modes:
+- **Daily Cost Trend** (area chart) — Shows cost progression over time
+- **Project Comparison** (bar chart) — Compares total cost across projects
+- **Session Distribution** (pie chart) — Visualizes cost distribution per session
+
+**Features**:
+- Fetches daily metrics via `sessions.getDailyMetrics(startDate, endDate, projectFilter?)`
+- Four stat cards: Total Cost, Total Tokens, Total Sessions, Avg Cost/Session
+- Responsive charts powered by Recharts (ResponsiveContainer, AreaChart, BarChart, PieChart)
+- Custom tooltips with formatted currency and token counts
+- Color scheme matches Claude brand (orange accent)
+
+**State management**:
+- Local state for metrics data, loading, error
+- Refresh mechanism with loading indicator
+- Integration with `AnalyticsFiltersBar` for filtering
+
+### `AnalyticsFiltersBar.tsx` — Filter controls
+
+Provides filtering and configuration for analytics view:
+- **Date range presets**: Last 7 days, Last 30 days, Last 90 days, All time, Custom
+- **Custom date picker**: Start and end date selection with calendar UI
+- **Project filter**: Multi-select dropdown for filtering by specific projects
+- **Metric selector**: Toggle between Cost, Tokens, Sessions views
+- **Refresh button**: Manual data reload with loading state
+
+**Implementation notes**:
+- Uses lucide icons for visual indicators
+- Validates date ranges (end date must be after start date)
+- Formats dates as YYYY-MM-DD for API calls
+- Persists filter state in URL query params (future enhancement)
+
+---
+
+## Session Import
+
+### `ImportSessionDialog.tsx` — 4-step import wizard
+
+Modal dialog for importing external Claude Code sessions (those not started from Claudia).
+
+**Step 1: Select Project**
+- Loads projects via `projects.list()` and scans for repos in settings root dir
+- Filters to show only projects NOT already imported
+- Search functionality across project names and paths
+- Displays project name, path, and session count
+
+**Step 2: Select Branch Filter**
+- Fetches branches via `git:branches(projectPath)`
+- Options: "All branches" or specific branch
+- Used to filter external sessions in next step
+
+**Step 3: Scan External Sessions**
+- Calls `sessions.scanExternal(projectPath, branch?)`
+- Displays list of detected external sessions with metadata:
+  - Session title (or first 50 chars of first message)
+  - Created date (formatted as relative time)
+  - Message count
+  - Total cost
+  - Branch badge (if available)
+- Shows validation status (✓ valid or ⚠️ invalid with reason)
+- Displays count of invalid sessions in banner
+- Search/filter within results
+
+**Step 4: Enter Session Name**
+- User selects a session to import
+- Input field with slug validation (lowercase, numbers, underscores only)
+- Real-time validation with error messages
+- Conflict detection (checks for existing session names)
+- Import button disabled until valid name entered
+- Calls `sessions.importExternal({ sessionId, name, branch })`
+- Shows success state with checkmark
+- Auto-closes dialog after 1.5s
+
+**Validation rules**:
+- Session name required
+- Must match regex: `/^[a-z0-9_]+$/`
+- Must be unique within project/branch
+- External session must not already be imported
+
+**UI/UX**:
+- Progress indicator for each step
+- Back/Next navigation
+- Loading states during async operations
+- Error handling with user-friendly messages
+- Responsive layout with proper spacing
 
 ---
 
@@ -157,6 +264,13 @@ App.tsx
 - Outer layout: `flex-row`. Left area (55% when terminal open, full width otherwise) holds `SessionView` or `WelcomeScreen`. Right area is `GlobalTerminalPanel`.
 - `GlobalTerminalPanel` — rendered at `MainPanel` level (not inside `SessionView`). Driven by `terminalVisible` from store. Persists across session switches. Shows `TerminalPane` if `terminalSessionId` is set, else placeholder. Has close (×) button.
 - `SessionView` — Tab layout: `Code | Logs | Session Info | Consumption`. Code tab `activeOnly: true`. `+` button opens `NewSessionDialog`.
+
+**`SetupWizard.tsx`** — First-run full-screen overlay shown when `projectsRootDir` is not configured.
+- Folder picker with `FolderOpen` icon and validation
+- Clear button to reset selection
+- Example path hint (e.g., `~/Documents/projects`)
+- "Continue" button disabled until valid directory selected
+- Saves `projectsRootDir` to settings and dismisses overlay
 
 **`WelcomeScreen.tsx`** — Static onboarding screen with `onNewSession` callback prop.
 
@@ -187,18 +301,64 @@ App.tsx
 
 **`MessageBubble.tsx`** — User message only
 - Renders only `text`-type content blocks (filters others)
+- Detects and renders `CommandBadge` for slash commands (e.g., `/commit`, `/help`, `/meli.spec`)
 - Returns `null` if no non-empty text blocks (hides tool_result plumbing messages)
 - Right-aligned bubble with User avatar icon
+- Command badges rendered inline with orange background
+
+**`CommandBadge.tsx`** — Slash command badge component
+- Displays slash commands as styled badges
+- Orange background (`#D97757` - Claude brand color)
+- Monospace font (`ui-monospace, Menlo, Monaco`)
+- Inline display with proper padding
+- Used in both `MessageBubble` and `AssistantTurnBubble`
+- Auto-detects commands via regex: `/^\/[a-z][a-z0-9\.\-]*$/i`
 
 **`AssistantTurnBubble.tsx`** — Assistant turn (the primary display component)
 - Renders all `AssistantContentGroup[]` from a turn
 - **Thinking blocks**: `GroupedThinkingBubble` — collapsible, shows block count + word count estimate
 - **Tool blocks**: `GroupedToolsBubble` — collapsible, shows tool icons + names; expanded shows per-tool input (truncated 300 chars) + result (truncated 1000 chars) with error highlighting
+  - **Special tool rendering**:
+    - `AskUserQuestion` → `QuestionBlock` — interactive question card with multiple-choice options
+    - `ExitPlanMode` → `PlanBubble` — collapsible plan summary with file lists and permission requests
 - **Text blocks**: `MarkdownRenderer` — uses `react-markdown` + `remark-gfm` + `react-syntax-highlighter` (oneDark theme); has `MdErrorBoundary` that falls back to `PlainMarkdown` on render error
 - Token usage footer: `input↑ output↓ tokens`
 - Tool icon mapping: Bash=Terminal, Read/Write=FileText, Edit/MultiEdit=Edit, Glob/Grep=Search, WebSearch/WebFetch=Globe
 
-**`ChatHeader.tsx`** — Session title (editable), status dot, model badge, project name
+**`QuestionBlock.tsx`** — AskUserQuestion tool renderer
+- Displays question header with lucide `HelpCircle` icon in orange
+- Question text in bold with clear formatting
+- Multiple-choice options rendered as rounded badge buttons
+- Visual states:
+  - Default: gray background with hover effect
+  - Selected: green background with checkmark icon
+  - Active: orange border for current question
+- Collapsible detailed answers section (if tool_result available)
+- Shows selected answer highlighted in green badge
+- Compact layout with proper spacing
+
+**`PlanBubble.tsx`** — ExitPlanMode tool renderer
+- Plan title/header with collapsible toggle
+- Markdown rendering for plan description/details
+- Structured file list section:
+  - File paths with syntax highlighting
+  - Status indicators (✓ to create, ✏️ to modify, etc.)
+  - Grouped by operation type
+- Permission requests section (if plan includes permission prompts):
+  - Tool name (e.g., "Bash")
+  - Permission prompt text
+  - Visual styling with orange accent
+- Collapsible state with smooth transitions
+- Clear visual hierarchy with proper indentation
+
+**`TerminalBubble.tsx`** — Sticky chat bubble shown at top of chat when terminal is hidden
+- Appears when `hiddenTerminals` contains the current session
+- `terminal-glow` CSS animation with orange-to-green border pulsing effect
+- `ChevronLeft` icon to indicate slide-in action
+- Clicking opens the terminal panel via `toggleTerminalVisible()`
+- Positioned with sticky top inside chat scroll area
+
+**`ChatHeader.tsx`** — Session title (editable), status dot, project name
 - **Terminal toggle button** (lucide `Terminal` icon) — calls `toggleTerminalVisible()`; highlights orange when `terminalVisible === true`
 
 **`CostBar.tsx`** — Cost display bar (used in legacy `ChatView`, not in `LogsTab`)
@@ -221,8 +381,17 @@ App.tsx
 
 ### Session Info
 
+**`SubsessionsTab.tsx`** — Subsession management for `/clear` child sessions
+- Lists child sessions via `sessions:getSubsessions(parentId)`
+- Displays subsession title, status, date, message count, cost
+- Click to navigate to child session (sets `activeSubsessionId`)
+- Delete button with `window.confirm` prompt for inactive subsessions without terminals
+- Loading state with `Loader`/`Trash2` icons during deletion
+- Auto-clears `activeSubsessionId` if deleting currently selected
+- Refreshes list after successful deletion
+
 **`SessionInfoTab.tsx`**
-- Session details grid: Status, Working Directory, Session ID, Created, Updated, Model, Message count, Tags
+- Session details grid: Status, Working Directory, Session ID, Created, Updated, Message count, Tags
 - Tasks list: all `user` role messages (reversed, newest first), shown as cards with status badge (Active if last + session active, else Closed), truncated prompt, collapsible full text
 
 ### Consumption
@@ -245,7 +414,11 @@ App.tsx
 - Exit: `event:terminal:exit` → writes `[terminal closed]` message in red
 
 **`SessionControls.tsx`** — Controls bar for active sessions (simplified)
-- **Rollback** button: calls `git:stash`, shows "Stashed ✓" for 3s
+- **Rollback** button:
+  - Shows confirmation dialog before executing `git stash`
+  - Dialog explains that uncommitted changes will be stashed
+  - On confirm: calls `git:stash`, shows "Stashed ✓" for 3s
+  - On cancel: no action taken
 - **Resume** button: calls `resumeSession()` — creates PTY + writes `claude --resume <id>` after 500ms, sets `terminalVisible: true`
 - Short session ID (first 16 chars) shown right-aligned
 - Terminal close is now handled by `GlobalTerminalPanel`'s own × button
@@ -254,9 +427,10 @@ App.tsx
 
 **`SettingsPanel.tsx`** — Full-screen modal overlay
 - **Claude Code Integration section**: Hooks Server status (running/stopped), Hook Scripts install/remove
-- **Default Session Options**: Default Model (Opus/Sonnet/Haiku), Permission Mode, Allowed Tools (comma-separated), Claude Executable Path, Projects Root Directory
+- **Default Session Options**: Allowed Tools (comma-separated), Claude Executable Path, Projects Root Directory
 - **UI Preferences**: Show thinking blocks toggle, Auto-scroll toggle
 - Save button calls `updateSettings(local)` which persists to SQLite and refreshes store
+- Note: `defaultModel` and `defaultPermissionMode` removed (unused by Claude CLI)
 
 ---
 

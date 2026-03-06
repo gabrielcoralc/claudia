@@ -2,18 +2,7 @@ import fs from 'fs'
 import readline from 'readline'
 import type { Session, ClaudeMessage, TranscriptEntry, SessionCostSummary } from '../../shared/types'
 import path from 'path'
-
-const CLAUDE_COST_PER_M_INPUT = 15.0
-const CLAUDE_COST_PER_M_OUTPUT = 75.0
-const SONNET_COST_PER_M_INPUT = 3.0
-const SONNET_COST_PER_M_OUTPUT = 15.0
-
-function getCostForModel(model: string, inputTokens: number, outputTokens: number): number {
-  const isOpus = model.includes('opus')
-  const perMInput = isOpus ? CLAUDE_COST_PER_M_INPUT : SONNET_COST_PER_M_INPUT
-  const perMOutput = isOpus ? CLAUDE_COST_PER_M_OUTPUT : SONNET_COST_PER_M_OUTPUT
-  return (inputTokens / 1_000_000) * perMInput + (outputTokens / 1_000_000) * perMOutput
-}
+import { getPricingService } from './PricingService'
 
 export function decodeProjectPath(encodedPath: string): string {
   // Claude Code encodes project paths by replacing '/' with '-'
@@ -54,7 +43,9 @@ export function getClaudeProjectsDir(): string {
   return path.join(home, '.claude', 'projects')
 }
 
-export async function readFirstEntry(transcriptPath: string): Promise<import('../../shared/types').TranscriptEntry | null> {
+export async function readFirstEntry(
+  transcriptPath: string
+): Promise<import('../../shared/types').TranscriptEntry | null> {
   if (!fs.existsSync(transcriptPath)) return null
   const fileStream = fs.createReadStream(transcriptPath)
   const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity })
@@ -69,7 +60,9 @@ export async function readFirstEntry(transcriptPath: string): Promise<import('..
         fileStream.destroy()
         return entry
       }
-    } catch { /* ignore malformed lines */ }
+    } catch {
+      /* ignore malformed lines */
+    }
   }
   return null
 }
@@ -87,12 +80,14 @@ function transformAskUserQuestion(content: ClaudeMessage['content']): ClaudeMess
     if (toolBlock.name !== 'AskUserQuestion') return block
 
     const input = toolBlock.input || {}
-    const questions = input.questions as Array<{
-      question?: string
-      header?: string
-      multiSelect?: boolean
-      options?: Array<{ label?: string; description?: string }>
-    }> | undefined
+    const questions = input.questions as
+      | Array<{
+          question?: string
+          header?: string
+          multiSelect?: boolean
+          options?: Array<{ label?: string; description?: string }>
+        }>
+      | undefined
 
     if (!questions || !Array.isArray(questions)) return block
 
@@ -120,6 +115,7 @@ export async function parseTranscriptFile(transcriptPath: string): Promise<{
   costSummary: Partial<SessionCostSummary>
   cwd?: string
   gitBranch?: string
+  rawLineCount: number
 }> {
   const messages: ClaudeMessage[] = []
   let totalInputTokens = 0
@@ -131,15 +127,18 @@ export async function parseTranscriptFile(transcriptPath: string): Promise<{
   let model = ''
   let cwd: string | undefined
   let gitBranch: string | undefined
+  let rawLineCount = 0
+  const seenRequestIds = new Set<string>()
 
   if (!fs.existsSync(transcriptPath)) {
-    return { messages, costSummary: {} }
+    return { messages, costSummary: {}, rawLineCount: 0 }
   }
 
   const fileStream = fs.createReadStream(transcriptPath)
   const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity })
 
   for await (const line of rl) {
+    rawLineCount++
     if (!line.trim()) continue
     try {
       const entry: TranscriptEntry = JSON.parse(line)
@@ -154,27 +153,38 @@ export async function parseTranscriptFile(transcriptPath: string): Promise<{
         if (!entry.message) continue
         const msg = entry.message
 
-        // Skip system-injected user messages from Claude Code slash commands (e.g. /exit, /status)
+        // Preserve command messages (e.g. /meli.start) — they are rendered as
+        // compact badges in the UI via commandDetector. Only skip local-command
+        // entries that carry no useful command name (raw stdout, XML wrappers).
         if (entry.type === 'user' && typeof msg.content === 'string') {
           const s = msg.content as string
-          if (
-            s.startsWith('<local-command') ||
-            s.startsWith('<command-name>') ||
-            s.startsWith('<command-message>') ||
-            s.startsWith('<local-command-stdout>')
-          ) continue
+          if (s.startsWith('<local-command') || s.startsWith('<local-command-stdout>')) continue
         }
 
         if (msg.model) model = msg.model
 
+        // Deduplicate usage: Claude Code writes multiple JSONL entries per API call
+        // (e.g. thinking + text chunks) that share the same requestId/msg.id and
+        // carry identical cumulative usage. Only count usage once per API call.
         if (msg.usage) {
-          const inputT = msg.usage.input_tokens ?? 0
-          const outputT = msg.usage.output_tokens ?? 0
-          totalInputTokens += inputT
-          totalOutputTokens += outputT
-          cacheReadTokens += msg.usage.cache_read_input_tokens ?? 0
-          cacheCreationTokens += msg.usage.cache_creation_input_tokens ?? 0
-          totalCostUsd += getCostForModel(model, inputT, outputT)
+          const usageKey = entry.requestId || msg.id || ''
+          if (!usageKey || !seenRequestIds.has(usageKey)) {
+            if (usageKey) seenRequestIds.add(usageKey)
+
+            const inputT = msg.usage.input_tokens ?? 0
+            const outputT = msg.usage.output_tokens ?? 0
+            const cacheCreationT = msg.usage.cache_creation_input_tokens ?? 0
+            const cacheReadT = msg.usage.cache_read_input_tokens ?? 0
+
+            totalInputTokens += inputT
+            totalOutputTokens += outputT
+            cacheReadTokens += cacheReadT
+            cacheCreationTokens += cacheCreationT
+
+            // Use PricingService for accurate cost calculation including cache tokens
+            const pricingService = getPricingService()
+            totalCostUsd += pricingService.calculateCost(model, inputT, outputT, cacheCreationT, cacheReadT)
+          }
         }
 
         // Handle both array and string content formats
@@ -186,6 +196,23 @@ export async function parseTranscriptFile(transcriptPath: string): Promise<{
 
         // Transform AskUserQuestion tool_use into a readable question text block
         content = transformAskUserQuestion(content)
+
+        // Attach toolUseResult (e.g. AskUserQuestion answers) to tool_result blocks
+        if (entry.toolUseResult) {
+          try {
+            const parsed =
+              typeof entry.toolUseResult === 'string' ? JSON.parse(entry.toolUseResult) : entry.toolUseResult
+            if (parsed && typeof parsed === 'object' && 'answers' in parsed) {
+              for (const block of content) {
+                if (block.type === 'tool_result') {
+                  ;(block as import('../../shared/types').ClaudeToolResultContent).toolUseResult = parsed
+                }
+              }
+            }
+          } catch {
+            /* ignore malformed toolUseResult */
+          }
+        }
 
         for (const block of content) {
           if (block.type === 'tool_use') toolCallCount++
@@ -211,14 +238,14 @@ export async function parseTranscriptFile(transcriptPath: string): Promise<{
       } else if (entry.type === 'result') {
         if (entry.costUsd) totalCostUsd = entry.costUsd
       }
-    } catch {
-    }
+    } catch {}
   }
 
   return {
     messages,
     cwd,
     gitBranch,
+    rawLineCount,
     costSummary: {
       totalCostUsd,
       totalInputTokens,

@@ -29,6 +29,13 @@ window.api = {
     launchNew(opts: { projectPath, branch, name }):
                                              Promise<{ success: boolean; launchId?: string; error?: string }>
     resetActive():                           Promise<void>   // reset all active sessions to completed
+    scanExternal(projectPath, branch?):      Promise<Session[]>  // scan for external .jsonl not in DB
+    importExternal(opts: { sessionId, name, branch? }):
+                                             Promise<{ success: boolean; error?: string }>
+    getDailyMetrics(startDate, endDate, projectFilter?):
+                                             Promise<DailyMetric[]>  // analytics daily aggregates
+    getSubsessions(parentId):                Promise<Session[]>     // child sessions from /clear
+    registerResume(sessionId):               Promise<void>          // mark intentional resume vs /clear
   },
 
   projects: {
@@ -71,6 +78,12 @@ window.api = {
                                              Promise<{ success: boolean; response?: string; error?: string }>
   },
 
+  updater: {
+    check():                                 Promise<{ hasUpdate: boolean; version?: string; releaseNotes?: string }>
+    download():                              Promise<void>
+    install():                               Promise<void>   // quits app and installs update
+  },
+
   on(channel, callback):  () => void   // returns unsubscribe function
   off(channel):  void
 }
@@ -97,6 +110,11 @@ Subscribed in the renderer via `window.api.on(channel, callback)`. The `on()` ca
 | `event:claudeProcessExit` | `{ pid: number; code: number \| null }` | `ipc/handlers.ts` — spawned claude process exited |
 | `event:terminal:data` | `{ sessionId: string; data: string }` | `TerminalService` — PTY output chunk |
 | `event:terminal:exit` | `{ sessionId: string }` | `TerminalService` — PTY process exited; triggers cleanup in renderer |
+| `event:update:available` | `{ version: string; releaseNotes: string }` | `AutoUpdater` — new version available on GitHub |
+| `event:update:not-available` | `null` | `AutoUpdater` — already on latest version |
+| `event:update:progress` | `{ percent: number; bytesPerSecond: number; transferred: number; total: number }` | `AutoUpdater` — download progress update |
+| `event:update:downloaded` | `{ version: string }` | `AutoUpdater` — download complete, ready to install |
+| `event:update:error` | `{ error: string }` | `AutoUpdater` — update check or download failed |
 
 ---
 

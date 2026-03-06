@@ -15,25 +15,22 @@ export interface Session {
   transcriptPath: string
   startedAt: string
   endedAt?: string
-  model: string
   status: SessionStatus
   totalCostUsd?: number
   totalInputTokens?: number
   totalOutputTokens?: number
+  cacheReadTokens?: number
+  cacheCreationTokens?: number
   messageCount: number
   tags: string[]
   title?: string
   branch?: string
   source?: 'app' | 'external'
+  parentSessionId?: string
 }
 
 export type ClaudeMessageRole = 'user' | 'assistant'
-export type ClaudeContentType =
-  | 'text'
-  | 'thinking'
-  | 'tool_use'
-  | 'tool_result'
-  | 'image'
+export type ClaudeContentType = 'text' | 'thinking' | 'tool_use' | 'tool_result' | 'image'
 
 export interface ClaudeTextContent {
   type: 'text'
@@ -57,13 +54,11 @@ export interface ClaudeToolResultContent {
   tool_use_id: string
   content: string | ClaudeTextContent[]
   is_error?: boolean
+  /** Parsed toolUseResult from the JSONL entry (e.g. AskUserQuestion answers) */
+  toolUseResult?: Record<string, unknown>
 }
 
-export type ClaudeContent =
-  | ClaudeTextContent
-  | ClaudeThinkingContent
-  | ClaudeToolUseContent
-  | ClaudeToolResultContent
+export type ClaudeContent = ClaudeTextContent | ClaudeThinkingContent | ClaudeToolUseContent | ClaudeToolResultContent
 
 export interface ClaudeMessage {
   id: string
@@ -93,19 +88,19 @@ export interface TranscriptEntry {
     usage?: ClaudeMessage['usage']
   }
   // Conversation metadata (present on user/assistant/progress, absent on file-history-snapshot)
-  cwd?: string                       // real filesystem path — source of truth for project name
-  sessionId?: string                 // matches the .jsonl filename without extension
-  gitBranch?: string                 // current git branch
-  slug?: string                      // random human-readable id e.g. "hashed-hopping-lerdorf"
-  version?: string                   // Claude Code version e.g. "2.1.42"
-  uuid?: string                      // this entry's unique ID
-  parentUuid?: string | null         // parent entry ID (conversation tree)
+  cwd?: string // real filesystem path — source of truth for project name
+  sessionId?: string // matches the .jsonl filename without extension
+  gitBranch?: string // current git branch
+  slug?: string // random human-readable id e.g. "hashed-hopping-lerdorf"
+  version?: string // Claude Code version e.g. "2.1.42"
+  uuid?: string // this entry's unique ID
+  parentUuid?: string | null // parent entry ID (conversation tree)
   isSidechain?: boolean
   userType?: string
   timestamp?: string
   // Tool result fields (on user entries that return tool output)
-  toolUseResult?: string             // duplicate of message.content[].content for tool results
-  sourceToolAssistantUUID?: string   // points to the assistant entry that called the tool
+  toolUseResult?: string // duplicate of message.content[].content for tool results
+  sourceToolAssistantUUID?: string // points to the assistant entry that called the tool
   // Permission mode (on user entries: 'default', 'plan', 'acceptEdits', 'bypassPermissions')
   permissionMode?: string
   // Legacy / hooks fields
@@ -113,7 +108,7 @@ export interface TranscriptEntry {
   subtype?: string
   costUsd?: number
   duration_ms?: number
-  session_id?: string                // older format, prefer sessionId
+  session_id?: string // older format, prefer sessionId
   // Progress-specific
   data?: Record<string, unknown>
   toolUseID?: string
@@ -136,9 +131,9 @@ export interface SessionCostSummary {
 // Analytics interfaces
 export interface AnalyticsFilters {
   startDate?: string // YYYY-MM-DD
-  endDate?: string   // YYYY-MM-DD
+  endDate?: string // YYYY-MM-DD
   projectPaths?: string[] // empty = all projects
-  sessionSearch?: string  // search in session title
+  sessionSearch?: string // search in session title
 }
 
 export interface AnalyticsMetrics {
@@ -160,7 +155,6 @@ export interface SessionMetrics {
   outputTokens: number
   totalTokens: number
   startedAt: string
-  model: string
 }
 
 export interface ProjectMetrics {
@@ -193,8 +187,6 @@ export interface EntityDailyMetrics {
 
 export interface AppSettings {
   defaultAllowedTools: string[]
-  defaultPermissionMode: 'default' | 'plan' | 'acceptEdits' | 'bypassPermissions'
-  defaultModel: string
   hooksEnabled: boolean
   hooksServerPort: number
   claudeExecutablePath: string
@@ -206,8 +198,6 @@ export interface AppSettings {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   defaultAllowedTools: [],
-  defaultPermissionMode: 'default',
-  defaultModel: 'claude-opus-4-5',
   hooksEnabled: true,
   hooksServerPort: 27182,
   claudeExecutablePath: '',
@@ -220,6 +210,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 export interface IpcChannels {
   // Sessions
   'sessions:list': () => Session[]
+  'sessions:listByProjectAndBranch': (projectPath: string, branch?: string, includeExternal?: boolean) => Session[]
   'sessions:get': (id: string) => Session | null
   'sessions:getMessages': (id: string) => ClaudeMessage[]
   'sessions:getCostSummary': (id: string) => SessionCostSummary | null
@@ -228,6 +219,12 @@ export interface IpcChannels {
   'sessions:updateStatus': (id: string, status: SessionStatus) => void
   'sessions:addTag': (id: string, tag: string) => void
   'sessions:removeTag': (id: string, tag: string) => void
+  'sessions:updateBranch': (
+    id: string,
+    projectPath: string,
+    branchName?: string
+  ) => { success: boolean; branch?: string; error?: string }
+  'sessions:getSubsessions': (parentId: string) => Session[]
 
   // Projects
   'projects:list': () => Project[]
@@ -242,20 +239,19 @@ export interface IpcChannels {
   'hooks:status': () => { installed: boolean; serverRunning: boolean }
 
   // Claude process
-  'claude:launch': (opts: {
-    cwd: string
-    prompt?: string
-    sessionId?: string
-    resume?: boolean
-  }) => { success: boolean; pid?: number; error?: string }
+  'claude:launch': (opts: { cwd: string; prompt?: string; sessionId?: string; resume?: boolean }) => {
+    success: boolean
+    pid?: number
+    error?: string
+  }
   'claude:kill': (pid: number) => void
 
   // Session launch (new flow)
-  'sessions:launchNew': (opts: {
-    projectPath: string
-    branch: string
-    name: string
-  }) => { success: boolean; launchId?: string; error?: string }
+  'sessions:launchNew': (opts: { projectPath: string; branch: string; name: string }) => {
+    success: boolean
+    launchId?: string
+    error?: string
+  }
   'sessions:resetActive': () => void
 
   // Analytics
@@ -275,4 +271,5 @@ export interface IpcChannels {
   'event:terminalLinked': { launchId: string; sessionId: string }
   'event:sessionActivity': { sessionId: string; type: string; detail?: string; timestamp: string }
   'event:terminal:exit': { sessionId: string }
+  'event:subsessionCreated': { parentSessionId: string; session: Session }
 }

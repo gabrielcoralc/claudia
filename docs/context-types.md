@@ -16,7 +16,6 @@ Imported by both main process and renderer. Contains all core interfaces and the
   transcriptPath: string   // absolute path to .jsonl file
   startedAt: string        // ISO — file birthtime
   endedAt?: string         // ISO — set by Stop/SessionEnd hook
-  model: string            // e.g. 'claude-opus-4-5'
   status: SessionStatus    // 'active' | 'completed' | 'paused'
   totalCostUsd?: number
   totalInputTokens?: number
@@ -26,6 +25,7 @@ Imported by both main process and renderer. Contains all core interfaces and the
   title?: string           // user-provided slug name (e.g. 'feat_user_auth')
   branch?: string          // git branch used for this session
   source?: 'app' | 'external'  // 'app' = launched from Claudia; only 'app' shown in UI
+  parentSessionId?: string // parent session ID for subsessions created by /clear
 }
 ```
 
@@ -88,19 +88,20 @@ Note: `cacheReadTokens`/`cacheCreationTokens`/`toolCallCount`/`durationMs` are c
 ```typescript
 {
   defaultAllowedTools: string[]           // e.g. ['Bash', 'Read', 'Edit']
-  defaultPermissionMode: 'default' | 'plan' | 'acceptEdits' | 'bypassPermissions'
-  defaultModel: string                    // default: 'claude-opus-4-5'
   hooksEnabled: boolean                   // default: true
   hooksServerPort: number                 // default: 27182
-  claudeExecutablePath: string            // empty = auto-detect via `which`
+  claudeExecutablePath: string            // empty = auto-detect via resolveClaudePath()
   theme: 'dark' | 'light' | 'system'     // default: 'dark'
   showThinking: boolean                   // default: true
   autoScrollToBottom: boolean             // default: true
-  projectsRootDir: string                 // for NewSessionDialog repo scanner; empty = '~'
+  projectsRootDir: string                 // for NewSessionDialog repo scanner and SetupWizard; empty = '~'
 }
 ```
+Note: `defaultModel` and `defaultPermissionMode` were removed (unused by Claude CLI).
 
 `DEFAULT_SETTINGS` is exported and merged with stored settings on read (protects against missing keys after updates).
+
+> `claudeExecutablePath` resolution: when empty, `resolveClaudePath()` uses a fallback chain: `which` → login shell PATH → `COMMON_CLAUDE_PATHS` (Homebrew, npm-global, nvm).
 
 ### `Project`
 ```typescript
@@ -123,6 +124,43 @@ Note: `cacheReadTokens`/`cacheCreationTokens`/`toolCallCount`/`durationMs` are c
 ```
 Defined in `src/renderer/src/stores/sessionStore.ts` and used for real-time session activity tracking. Auto-clears after 10 seconds via `event:sessionActivity` listener in App.tsx.
 
+### `DailyMetric`
+```typescript
+{
+  date: string                    // YYYY-MM-DD format
+  totalCost: number               // total cost in USD for this day
+  totalTokens: number             // total input + output tokens
+  sessionCount: number            // number of sessions active on this day
+  inputTokens: number             // total input tokens
+  outputTokens: number            // total output tokens
+  cacheWriteTokens?: number       // cache creation tokens (optional)
+  cacheReadTokens?: number        // cache read tokens (optional)
+}
+```
+Used by `AnalyticsPanel` for daily cost trends, project comparison, and session distribution charts. Returned by `sessions.getDailyMetrics(startDate, endDate, projectFilter?)`.
+
+### `UpdateInfo`
+```typescript
+{
+  version: string                 // semantic version (e.g., '0.2.0')
+  releaseNotes: string            // markdown release notes from GitHub
+  releaseDate: string             // ISO timestamp
+  files: UpdateFileInfo[]         // array of downloadable files
+}
+```
+Represents available update information from GitHub releases. Used by `AutoUpdater` service.
+
+### `UpdateProgress`
+```typescript
+{
+  percent: number                 // download progress percentage (0-100)
+  bytesPerSecond: number          // download speed in bytes/sec
+  transferred: number             // bytes downloaded so far
+  total: number                   // total file size in bytes
+}
+```
+Used by `AutoUpdater` to emit download progress events. Sent via `event:update:progress` to renderer for UI progress bars.
+
 ---
 
 ## IPC Channel Types (`IpcChannels`)
@@ -142,6 +180,11 @@ interface IpcChannels {
   'sessions:removeTag':   (id, tag) => void
   'sessions:launchNew':   (opts: { projectPath, branch, name }) => { success; launchId?; error? }
   'sessions:resetActive': () => void   // reset all active sessions to completed on app start
+  'sessions:scanExternal': (projectPath, branch?) => Session[]  // scan for external .jsonl not in DB
+  'sessions:importExternal': (opts: { sessionId, name, branch? }) => { success; error? }
+  'sessions:getDailyMetrics': (startDate, endDate, projectFilter?) => DailyMetric[]
+  'sessions:getSubsessions': (parentId) => Session[]  // child sessions from /clear
+  'sessions:registerResume': (sessionId) => void       // mark intentional resume vs /clear
   'projects:list':        () => Project[]
   'settings:get':         () => AppSettings
   'settings:update':      (partial) => void
@@ -159,5 +202,13 @@ interface IpcChannels {
   'event:terminalLinked': { launchId: string; sessionId: string }
   'event:sessionActivity': { sessionId: string; type: string; detail?: string; timestamp: string }
   'event:terminal:exit':  { sessionId: string }
+  'event:update:available': { version: string; releaseNotes: string }
+  'event:update:not-available': null
+  'event:update:progress': UpdateProgress
+  'event:update:downloaded': { version: string }
+  'event:update:error': { error: string }
+  'updater:check':        () => { hasUpdate: boolean; version?: string; releaseNotes?: string }
+  'updater:download':     () => void
+  'updater:install':      () => void
 }
 ```

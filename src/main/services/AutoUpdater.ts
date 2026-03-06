@@ -1,10 +1,11 @@
 import { autoUpdater } from 'electron-updater'
-import { BrowserWindow, dialog } from 'electron'
+import { dialog } from 'electron'
 import { is } from '@electron-toolkit/utils'
+import { getMainWindow, sendToRenderer } from './WindowManager'
 
 let updateCheckInterval: NodeJS.Timeout | null = null
 
-export function setupAutoUpdater(mainWindow: BrowserWindow): void {
+export function setupAutoUpdater(): void {
   // Solo habilitar en producción
   if (is.dev) {
     console.log('Auto-updater deshabilitado en desarrollo')
@@ -16,11 +17,13 @@ export function setupAutoUpdater(mainWindow: BrowserWindow): void {
   autoUpdater.autoInstallOnAppQuit = true
 
   // Cuando hay una actualización disponible
-  autoUpdater.on('update-available', (info) => {
+  autoUpdater.on('update-available', info => {
     console.log('Actualización disponible:', info.version)
 
+    const win = getMainWindow()
+    if (!win) return
     dialog
-      .showMessageBox(mainWindow, {
+      .showMessageBox(win, {
         type: 'info',
         title: 'Actualización disponible',
         message: `Nueva versión ${info.version} disponible`,
@@ -29,7 +32,7 @@ export function setupAutoUpdater(mainWindow: BrowserWindow): void {
         defaultId: 0,
         cancelId: 1
       })
-      .then((result) => {
+      .then(result => {
         if (result.response === 0) {
           autoUpdater.downloadUpdate()
         }
@@ -42,20 +45,22 @@ export function setupAutoUpdater(mainWindow: BrowserWindow): void {
   })
 
   // Progreso de descarga
-  autoUpdater.on('download-progress', (progressObj) => {
+  autoUpdater.on('download-progress', progressObj => {
     const percent = Math.round(progressObj.percent)
     console.log(`Descargando actualización: ${percent}%`)
 
     // Enviar progreso al renderer
-    mainWindow.webContents.send('update-download-progress', percent)
+    sendToRenderer('update-download-progress', percent)
   })
 
   // Actualización descargada
-  autoUpdater.on('update-downloaded', (info) => {
+  autoUpdater.on('update-downloaded', info => {
     console.log('Actualización descargada:', info.version)
 
+    const win = getMainWindow()
+    if (!win) return
     dialog
-      .showMessageBox(mainWindow, {
+      .showMessageBox(win, {
         type: 'info',
         title: 'Actualización lista',
         message: `Versión ${info.version} descargada`,
@@ -64,7 +69,7 @@ export function setupAutoUpdater(mainWindow: BrowserWindow): void {
         defaultId: 0,
         cancelId: 1
       })
-      .then((result) => {
+      .then(result => {
         if (result.response === 0) {
           autoUpdater.quitAndInstall(false, true)
         }
@@ -72,7 +77,7 @@ export function setupAutoUpdater(mainWindow: BrowserWindow): void {
   })
 
   // Error al actualizar
-  autoUpdater.on('error', (error) => {
+  autoUpdater.on('error', error => {
     console.error('Error al actualizar:', error)
   })
 
@@ -82,9 +87,12 @@ export function setupAutoUpdater(mainWindow: BrowserWindow): void {
   }, 3000) // Esperar 3 segundos después del inicio
 
   // Verificar actualizaciones cada 6 horas
-  updateCheckInterval = setInterval(() => {
-    checkForUpdates()
-  }, 6 * 60 * 60 * 1000)
+  updateCheckInterval = setInterval(
+    () => {
+      checkForUpdates()
+    },
+    6 * 60 * 60 * 1000
+  )
 }
 
 export function checkForUpdates(): void {

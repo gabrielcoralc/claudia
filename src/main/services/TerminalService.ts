@@ -1,6 +1,6 @@
-import { BrowserWindow } from 'electron'
 import { exec } from 'child_process'
 import { promisify } from 'util'
+import { sendToRenderer } from './WindowManager'
 
 const execAsync = promisify(exec)
 
@@ -27,7 +27,7 @@ interface TerminalInstance {
 
 const terminals = new Map<string, TerminalInstance>()
 
-export function createTerminal(sessionId: string, cwd: string, win: BrowserWindow): boolean {
+export function createTerminal(sessionId: string, cwd: string): boolean {
   const nodePty = getPty()
   if (!nodePty) {
     console.error(`[TerminalService] createTerminal FAILED — node-pty not available (id=${sessionId})`)
@@ -53,13 +53,13 @@ export function createTerminal(sessionId: string, cwd: string, win: BrowserWindo
   const inst: TerminalInstance = { proc, cwd, currentId: sessionId }
 
   proc.onData((data: string) => {
-    win.webContents.send('event:terminal:data', { sessionId: inst.currentId, data })
+    sendToRenderer('event:terminal:data', { sessionId: inst.currentId, data })
   })
 
   proc.onExit(({ exitCode, signal }: { exitCode: number; signal?: number }) => {
     console.log(`[TerminalService] onExit id=${inst.currentId} exitCode=${exitCode} signal=${signal}`)
     terminals.delete(inst.currentId)
-    win.webContents.send('event:terminal:exit', { sessionId: inst.currentId })
+    sendToRenderer('event:terminal:exit', { sessionId: inst.currentId })
   })
 
   terminals.set(sessionId, inst)
@@ -79,7 +79,9 @@ export function killTerminal(sessionId: string): void {
   const inst = terminals.get(sessionId)
   if (inst) {
     console.log(`[TerminalService] killTerminal id=${sessionId}`)
-    try { inst.proc.kill() } catch (e) {
+    try {
+      inst.proc.kill()
+    } catch (e) {
       console.error(`[TerminalService] killTerminal error for id=${sessionId}:`, e)
     }
     terminals.delete(sessionId)
@@ -106,6 +108,15 @@ export function killAllTerminals(): void {
 
 export function isTerminalRunning(sessionId: string): boolean {
   return terminals.has(sessionId)
+}
+
+export function findTerminalByCwd(cwd: string): { currentSessionId: string; cwd: string } | undefined {
+  for (const inst of terminals.values()) {
+    if (inst.cwd === cwd) {
+      return { currentSessionId: inst.currentId, cwd: inst.cwd }
+    }
+  }
+  return undefined
 }
 
 // ─── Git helpers ─────────────────────────────────────────────────────────────
@@ -176,12 +187,31 @@ export async function stashChanges(projectPath: string): Promise<{ success: bool
 
 export async function getBranches(projectPath: string): Promise<string[]> {
   try {
-    const { stdout } = await execAsync('git branch --list', { cwd: projectPath })
-    return stdout.split('\n')
-      .map(b => b.replace(/^\*?\s+/, '').trim())
-      .filter(Boolean)
+    // Detectar TODAS las ramas (locales + remotas)
+    const { stdout } = await execAsync("git branch -a --format='%(refname:short)'", { cwd: projectPath })
+
+    return (
+      stdout
+        .split('\n')
+        .map(b => b.trim())
+        .filter(Boolean)
+        // Normalizar: remover prefijo remotes/origin/
+        .map(b => b.replace(/^(remotes\/)?origin\//, ''))
+        // Deduplicar (main y origin/main → solo main)
+        .filter((branch, index, self) => self.indexOf(branch) === index)
+        .sort()
+    )
   } catch {
     return []
+  }
+}
+
+export async function getCurrentBranch(projectPath: string): Promise<string | null> {
+  try {
+    const { stdout } = await execAsync('git branch --show-current', { cwd: projectPath })
+    return stdout.trim() || null
+  } catch {
+    return null
   }
 }
 
@@ -192,7 +222,8 @@ export async function findGitRepos(baseDir: string, maxDepth = 5): Promise<strin
     const { stdout } = await execAsync(
       `find "${resolvedDir}" -maxdepth ${maxDepth} -name ".git" -type d -prune 2>/dev/null | head -500`
     )
-    return stdout.split('\n')
+    return stdout
+      .split('\n')
       .filter(Boolean)
       .map(p => p.replace(/\/.git$/, ''))
       .sort()

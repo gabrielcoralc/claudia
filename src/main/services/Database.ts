@@ -1,8 +1,19 @@
 import Database from 'better-sqlite3'
 import { app } from 'electron'
 import path from 'path'
-import fs from 'fs'
-import type { Session, ClaudeMessage, AppSettings, SessionCostSummary, Project, AnalyticsFilters, AnalyticsMetrics, SessionMetrics, ProjectMetrics, DailyMetrics, EntityDailyMetrics } from '../../shared/types'
+import type {
+  Session,
+  ClaudeMessage,
+  AppSettings,
+  SessionCostSummary,
+  Project,
+  AnalyticsFilters,
+  AnalyticsMetrics,
+  SessionMetrics,
+  ProjectMetrics,
+  DailyMetrics,
+  EntityDailyMetrics
+} from '../../shared/types'
 import { DEFAULT_SETTINGS } from '../../shared/types'
 
 let db: Database.Database
@@ -33,6 +44,8 @@ function initSchema(db: Database.Database): void {
       total_cost_usd REAL,
       total_input_tokens INTEGER,
       total_output_tokens INTEGER,
+      cache_read_tokens INTEGER,
+      cache_creation_tokens INTEGER,
       message_count INTEGER NOT NULL DEFAULT 0,
       title TEXT,
       tags TEXT NOT NULL DEFAULT '[]',
@@ -115,27 +128,48 @@ function initSchema(db: Database.Database): void {
     // Column already exists — safe to ignore
   }
 
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN cache_read_tokens INTEGER`)
+  } catch {
+    // Column already exists — safe to ignore
+  }
+
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN cache_creation_tokens INTEGER`)
+  } catch {
+    // Column already exists — safe to ignore
+  }
+
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN parent_session_id TEXT`)
+  } catch {
+    // Column already exists — safe to ignore
+  }
+
+  // Cleanup: fix self-referencing parent_session_id (caused by resume bug)
+  db.exec(`UPDATE sessions SET parent_session_id = NULL WHERE parent_session_id = id`)
+
   const existingSettings = db.prepare('SELECT key FROM settings WHERE key = ?').get('app_settings')
   if (!existingSettings) {
-    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run(
-      'app_settings',
-      JSON.stringify(DEFAULT_SETTINGS)
-    )
+    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('app_settings', JSON.stringify(DEFAULT_SETTINGS))
   }
 }
 
 export const sessionDb = {
   upsert(session: Session): void {
     const db = getDb()
-    db.prepare(`
+    db.prepare(
+      `
       INSERT INTO sessions (
         id, project_path, project_name, transcript_path, started_at, ended_at,
-        model, status, total_cost_usd, total_input_tokens, total_output_tokens,
-        message_count, title, tags, source, branch
+        status, total_cost_usd, total_input_tokens, total_output_tokens,
+        cache_read_tokens, cache_creation_tokens,
+        message_count, title, tags, source, branch, parent_session_id
       ) VALUES (
         @id, @projectPath, @projectName, @transcriptPath, @startedAt, @endedAt,
-        @model, @status, @totalCostUsd, @totalInputTokens, @totalOutputTokens,
-        @messageCount, @title, @tags, @source, @branch
+        @status, @totalCostUsd, @totalInputTokens, @totalOutputTokens,
+        @cacheReadTokens, @cacheCreationTokens,
+        @messageCount, @title, @tags, @source, @branch, @parentSessionId
       )
       ON CONFLICT(id) DO UPDATE SET
         ended_at = @endedAt,
@@ -143,37 +177,46 @@ export const sessionDb = {
         total_cost_usd = @totalCostUsd,
         total_input_tokens = @totalInputTokens,
         total_output_tokens = @totalOutputTokens,
+        cache_read_tokens = @cacheReadTokens,
+        cache_creation_tokens = @cacheCreationTokens,
         message_count = @messageCount,
         title = COALESCE(@title, title),
         branch = COALESCE(@branch, branch),
         tags = @tags
-    `).run({
+    `
+    ).run({
       id: session.id,
       projectPath: session.projectPath,
       projectName: session.projectName,
       transcriptPath: session.transcriptPath,
       startedAt: session.startedAt,
       endedAt: session.endedAt ?? null,
-      model: session.model,
       status: session.status,
       totalCostUsd: session.totalCostUsd ?? null,
       totalInputTokens: session.totalInputTokens ?? null,
       totalOutputTokens: session.totalOutputTokens ?? null,
+      cacheReadTokens: session.cacheReadTokens ?? null,
+      cacheCreationTokens: session.cacheCreationTokens ?? null,
       messageCount: session.messageCount,
       title: session.title ?? null,
       tags: JSON.stringify(session.tags),
       source: session.source ?? 'app',
-      branch: session.branch ?? null
+      branch: session.branch ?? null,
+      parentSessionId: session.parentSessionId ?? null
     })
 
-    db.prepare(`
+    db.prepare(
+      `
       INSERT OR IGNORE INTO projects (path, name, last_active_at)
       VALUES (?, ?, ?)
-    `).run(session.projectPath, session.projectName, session.startedAt)
+    `
+    ).run(session.projectPath, session.projectName, session.startedAt)
 
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE projects SET last_active_at = ? WHERE path = ?
-    `).run(session.startedAt, session.projectPath)
+    `
+    ).run(session.startedAt, session.projectPath)
   },
 
   getById(id: string): Session | null {
@@ -184,8 +227,24 @@ export const sessionDb = {
 
   list(): Session[] {
     const db = getDb()
-    const rows = db.prepare("SELECT * FROM sessions WHERE source = 'app' ORDER BY started_at DESC").all() as Record<string, unknown>[]
+    const rows = db
+      .prepare("SELECT * FROM sessions WHERE source = 'app' AND parent_session_id IS NULL ORDER BY started_at DESC")
+      .all() as Record<string, unknown>[]
     return rows.map(rowToSession)
+  },
+
+  getSubsessions(parentId: string): Session[] {
+    const db = getDb()
+    const rows = db
+      .prepare('SELECT * FROM sessions WHERE parent_session_id = ? ORDER BY started_at ASC')
+      .all(parentId) as Record<string, unknown>[]
+    return rows.map(rowToSession)
+  },
+
+  getRootSessionId(sessionId: string): string {
+    const session = sessionDb.getById(sessionId)
+    if (!session) return sessionId
+    return session.parentSessionId ?? sessionId
   },
 
   delete(id: string): void {
@@ -201,17 +260,32 @@ export const sessionDb = {
   },
 
   updateStatus(id: string, status: Session['status'], endedAt?: string): void {
-    getDb().prepare('UPDATE sessions SET status = ?, ended_at = ? WHERE id = ?').run(status, endedAt ?? null, id)
+    getDb()
+      .prepare('UPDATE sessions SET status = ?, ended_at = ? WHERE id = ?')
+      .run(status, endedAt ?? null, id)
   },
 
   updateCost(id: string, summary: Partial<SessionCostSummary>): void {
-    getDb().prepare(`
+    getDb()
+      .prepare(
+        `
       UPDATE sessions SET
         total_cost_usd = ?,
         total_input_tokens = ?,
-        total_output_tokens = ?
+        total_output_tokens = ?,
+        cache_read_tokens = ?,
+        cache_creation_tokens = ?
       WHERE id = ?
-    `).run(summary.totalCostUsd ?? null, summary.totalInputTokens ?? null, summary.totalOutputTokens ?? null, id)
+    `
+      )
+      .run(
+        summary.totalCostUsd ?? null,
+        summary.totalInputTokens ?? null,
+        summary.totalOutputTokens ?? null,
+        summary.cacheReadTokens ?? null,
+        summary.cacheCreationTokens ?? null,
+        id
+      )
   },
 
   incrementMessageCount(id: string): void {
@@ -226,17 +300,68 @@ export const sessionDb = {
   updateProjectPath(id: string, projectPath: string, projectName: string): void {
     const db = getDb()
     db.prepare('UPDATE sessions SET project_path = ?, project_name = ? WHERE id = ?').run(projectPath, projectName, id)
-    db.prepare("INSERT OR IGNORE INTO projects (path, name, last_active_at) VALUES (?, ?, datetime('now'))").run(projectPath, projectName)
+    db.prepare("INSERT OR IGNORE INTO projects (path, name, last_active_at) VALUES (?, ?, datetime('now'))").run(
+      projectPath,
+      projectName
+    )
+  },
+
+  updateBranch(id: string, branch: string | null): void {
+    getDb().prepare('UPDATE sessions SET branch = ? WHERE id = ?').run(branch, id)
+  },
+
+  findDuplicate(projectPath: string, title: string, branch: string | null): Session | null {
+    const db = getDb()
+    const row = db
+      .prepare(
+        `
+      SELECT * FROM sessions
+      WHERE project_path = ?
+        AND title = ?
+        AND (branch = ? OR (branch IS NULL AND ? IS NULL))
+        AND source = 'app'
+      LIMIT 1
+    `
+      )
+      .get(projectPath, title, branch, branch) as Record<string, unknown> | undefined
+    return row ? rowToSession(row) : null
+  },
+
+  listByProjectAndBranch(projectPath: string, branch?: string, includeExternal?: boolean): Session[] {
+    const db = getDb()
+    let query = `
+      SELECT * FROM sessions
+      WHERE project_path = ?
+        AND parent_session_id IS NULL
+    `
+    const params: unknown[] = [projectPath]
+
+    // Filtrar por source a menos que explícitamente se incluyan externas
+    if (!includeExternal) {
+      query += ` AND source = 'app'`
+    }
+
+    if (branch && branch !== 'all') {
+      query += ` AND (branch = ? OR branch IS NULL)`
+      params.push(branch)
+    }
+
+    query += ` ORDER BY started_at DESC`
+
+    const rows = db.prepare(query).all(...params) as Record<string, unknown>[]
+    return rows.map(rowToSession)
   }
 }
 
 export const messageDb = {
   insert(message: ClaudeMessage): void {
     const db = getDb()
-    db.prepare(`
+    db.prepare(
+      `
       INSERT OR IGNORE INTO messages (id, session_id, role, content, timestamp, usage, permission_mode)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `
+    ).run(
       message.id,
       message.sessionId,
       message.role,
@@ -249,12 +374,22 @@ export const messageDb = {
 
   getBySessionId(sessionId: string): ClaudeMessage[] {
     const db = getDb()
-    const rows = db.prepare('SELECT * FROM messages WHERE session_id = ? ORDER BY timestamp ASC').all(sessionId) as Record<string, unknown>[]
+    const rows = db
+      .prepare('SELECT * FROM messages WHERE session_id = ? ORDER BY timestamp ASC')
+      .all(sessionId) as Record<string, unknown>[]
     return rows.map(row => {
       let content: ClaudeMessage['content'] = []
-      try { content = JSON.parse(row.content as string) } catch { content = [] }
+      try {
+        content = JSON.parse(row.content as string)
+      } catch {
+        content = []
+      }
       let usage: ClaudeMessage['usage'] | undefined
-      try { usage = row.usage ? JSON.parse(row.usage as string) : undefined } catch { usage = undefined }
+      try {
+        usage = row.usage ? JSON.parse(row.usage as string) : undefined
+      } catch {
+        usage = undefined
+      }
       return {
         id: row.id as string,
         sessionId: row.session_id as string,
@@ -271,14 +406,18 @@ export const messageDb = {
 export const projectDb = {
   list(): Project[] {
     const db = getDb()
-    const rows = db.prepare(`
+    const rows = db
+      .prepare(
+        `
       SELECT p.path, p.name, p.last_active_at,
              COUNT(s.id) as session_count
       FROM projects p
       LEFT JOIN sessions s ON s.project_path = p.path
       GROUP BY p.path
       ORDER BY p.last_active_at DESC
-    `).all() as Record<string, unknown>[]
+    `
+      )
+      .all() as Record<string, unknown>[]
     return rows.map(row => ({
       id: row.path as string,
       path: row.path as string,
@@ -292,7 +431,9 @@ export const projectDb = {
 export const settingsDb = {
   get(): AppSettings {
     const db = getDb()
-    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('app_settings') as { value: string } | undefined
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('app_settings') as
+      | { value: string }
+      | undefined
     if (!row) return { ...DEFAULT_SETTINGS }
     try {
       return { ...DEFAULT_SETTINGS, ...JSON.parse(row.value) }
@@ -320,34 +461,50 @@ function rowToSession(row: Record<string, unknown>): Session {
     transcriptPath: row.transcript_path as string,
     startedAt: row.started_at as string,
     endedAt: (row.ended_at as string | null) ?? undefined,
-    model: row.model as string,
     status: row.status as Session['status'],
     totalCostUsd: (row.total_cost_usd as number | null) ?? undefined,
     totalInputTokens: (row.total_input_tokens as number | null) ?? undefined,
     totalOutputTokens: (row.total_output_tokens as number | null) ?? undefined,
+    cacheReadTokens: (row.cache_read_tokens as number | null) ?? undefined,
+    cacheCreationTokens: (row.cache_creation_tokens as number | null) ?? undefined,
     messageCount: row.message_count as number,
     title: (row.title as string | null) ?? undefined,
-    tags: (() => { try { return JSON.parse((row.tags as string) || '[]') } catch { return [] } })(),
+    tags: (() => {
+      try {
+        return JSON.parse((row.tags as string) || '[]')
+      } catch {
+        return []
+      }
+    })(),
     branch: (row.branch as string | null) ?? undefined,
-    source: (row.source as Session['source']) ?? 'app'
+    source: (row.source as Session['source']) ?? 'app',
+    parentSessionId: (row.parent_session_id as string | null) ?? undefined
   }
 }
 
 export const reviewDb = {
   upsert(sessionId: string, reviewType: string, scope: string, filePath: string | null, content: string): void {
-    getDb().prepare(`
+    getDb()
+      .prepare(
+        `
       INSERT INTO reviews (session_id, review_type, scope, file_path, content)
       VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(session_id, review_type, scope, file_path) DO UPDATE SET
         content = excluded.content,
         created_at = datetime('now')
-    `).run(sessionId, reviewType, scope, filePath, content)
+    `
+      )
+      .run(sessionId, reviewType, scope, filePath, content)
   },
 
-  getBySession(sessionId: string): Array<{ reviewType: string; scope: string; filePath: string | null; content: string }> {
-    const rows = getDb().prepare(
-      'SELECT review_type, scope, file_path, content FROM reviews WHERE session_id = ? ORDER BY created_at ASC'
-    ).all(sessionId) as Record<string, unknown>[]
+  getBySession(
+    sessionId: string
+  ): Array<{ reviewType: string; scope: string; filePath: string | null; content: string }> {
+    const rows = getDb()
+      .prepare(
+        'SELECT review_type, scope, file_path, content FROM reviews WHERE session_id = ? ORDER BY created_at ASC'
+      )
+      .all(sessionId) as Record<string, unknown>[]
     return rows.map(r => ({
       reviewType: r.review_type as string,
       scope: r.scope as string,
@@ -357,9 +514,7 @@ export const reviewDb = {
   },
 
   deleteByFile(sessionId: string, filePath: string): void {
-    getDb().prepare(
-      'DELETE FROM reviews WHERE session_id = ? AND file_path = ?'
-    ).run(sessionId, filePath)
+    getDb().prepare('DELETE FROM reviews WHERE session_id = ? AND file_path = ?').run(sessionId, filePath)
   },
 
   deleteBySession(sessionId: string): void {
@@ -376,7 +531,8 @@ export const dailyMetricsDb = {
     delta: { costUsd: number; inputTokens: number; outputTokens: number; messageCount: number }
   ): void {
     const db = getDb()
-    db.prepare(`
+    db.prepare(
+      `
       INSERT INTO session_daily_metrics (session_id, date, project_path, project_name, cost_usd, input_tokens, output_tokens, message_count)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(session_id, date) DO UPDATE SET
@@ -384,7 +540,17 @@ export const dailyMetricsDb = {
         input_tokens = input_tokens + excluded.input_tokens,
         output_tokens = output_tokens + excluded.output_tokens,
         message_count = message_count + excluded.message_count
-    `).run(sessionId, date, projectPath, projectName, delta.costUsd, delta.inputTokens, delta.outputTokens, delta.messageCount)
+    `
+    ).run(
+      sessionId,
+      date,
+      projectPath,
+      projectName,
+      delta.costUsd,
+      delta.inputTokens,
+      delta.outputTokens,
+      delta.messageCount
+    )
   }
 }
 
@@ -392,8 +558,10 @@ export const analyticsDb = {
   getGlobalMetrics(filters: AnalyticsFilters): AnalyticsMetrics {
     const db = getDb()
     const { whereClause, params } = buildWhereClause(filters)
-    
-    const row = db.prepare(`
+
+    const row = db
+      .prepare(
+        `
       SELECT 
         COUNT(*) as totalSessions,
         COALESCE(SUM(total_cost_usd), 0) as totalCost,
@@ -404,10 +572,12 @@ export const analyticsDb = {
         MAX(started_at) as maxDate
       FROM sessions
       ${whereClause}
-    `).get(...params) as Record<string, unknown>
+    `
+      )
+      .get(...params) as Record<string, unknown>
 
     const totalTokens = (row.totalInputTokens as number) + (row.totalOutputTokens as number)
-    
+
     return {
       totalSessions: row.totalSessions as number,
       totalCost: row.totalCost as number,
@@ -425,8 +595,10 @@ export const analyticsDb = {
   getTopSessions(limit: number, filters: AnalyticsFilters): SessionMetrics[] {
     const db = getDb()
     const { whereClause, params } = buildWhereClause(filters)
-    
-    const rows = db.prepare(`
+
+    const rows = db
+      .prepare(
+        `
       SELECT 
         id as sessionId,
         title as sessionTitle,
@@ -434,13 +606,14 @@ export const analyticsDb = {
         COALESCE(total_cost_usd, 0) as cost,
         COALESCE(total_input_tokens, 0) as inputTokens,
         COALESCE(total_output_tokens, 0) as outputTokens,
-        started_at as startedAt,
-        model
+        started_at as startedAt
       FROM sessions
       ${whereClause}
       ORDER BY total_cost_usd DESC
       LIMIT ?
-    `).all(...params, limit) as Record<string, unknown>[]
+    `
+      )
+      .all(...params, limit) as Record<string, unknown>[]
 
     return rows.map(row => ({
       sessionId: row.sessionId as string,
@@ -450,16 +623,17 @@ export const analyticsDb = {
       inputTokens: row.inputTokens as number,
       outputTokens: row.outputTokens as number,
       totalTokens: (row.inputTokens as number) + (row.outputTokens as number),
-      startedAt: row.startedAt as string,
-      model: row.model as string
+      startedAt: row.startedAt as string
     }))
   },
 
   getProjectMetrics(filters: AnalyticsFilters): ProjectMetrics[] {
     const db = getDb()
     const { whereClause, params } = buildWhereClause(filters)
-    
-    const rows = db.prepare(`
+
+    const rows = db
+      .prepare(
+        `
       SELECT 
         project_name as projectName,
         project_path as projectPath,
@@ -471,7 +645,9 @@ export const analyticsDb = {
       ${whereClause}
       GROUP BY project_path
       ORDER BY totalCost DESC
-    `).all(...params) as Record<string, unknown>[]
+    `
+      )
+      .all(...params) as Record<string, unknown>[]
 
     return rows.map(row => ({
       projectName: row.projectName as string,
@@ -488,7 +664,9 @@ export const analyticsDb = {
     const db = getDb()
     const { whereClause, params } = buildDailyWhereClause(filters)
 
-    const rows = db.prepare(`
+    const rows = db
+      .prepare(
+        `
       SELECT 
         dm.session_id as entityId,
         COALESCE(s.title, substr(dm.session_id, 1, 8)) as entityName,
@@ -501,7 +679,9 @@ export const analyticsDb = {
       ${whereClause}
       GROUP BY dm.session_id, dm.date
       ORDER BY dm.date ASC
-    `).all(...params) as Record<string, unknown>[]
+    `
+      )
+      .all(...params) as Record<string, unknown>[]
 
     return rows.map(row => ({
       entityId: row.entityId as string,
@@ -517,7 +697,9 @@ export const analyticsDb = {
     const db = getDb()
     const { whereClause, params } = buildDailyWhereClause(filters)
 
-    const rows = db.prepare(`
+    const rows = db
+      .prepare(
+        `
       SELECT 
         dm.project_path as entityId,
         dm.project_name as entityName,
@@ -530,7 +712,9 @@ export const analyticsDb = {
       ${whereClause}
       GROUP BY dm.project_path, dm.date
       ORDER BY dm.date ASC
-    `).all(...params) as Record<string, unknown>[]
+    `
+      )
+      .all(...params) as Record<string, unknown>[]
 
     return rows.map(row => ({
       entityId: row.entityId as string,
@@ -545,8 +729,10 @@ export const analyticsDb = {
   getDailyMetrics(filters: AnalyticsFilters): DailyMetrics[] {
     const db = getDb()
     const { whereClause, params } = buildDailyWhereClause(filters)
-    
-    const rows = db.prepare(`
+
+    const rows = db
+      .prepare(
+        `
       SELECT 
         dm.date,
         COUNT(DISTINCT dm.session_id) as sessions,
@@ -558,7 +744,9 @@ export const analyticsDb = {
       ${whereClause}
       GROUP BY dm.date
       ORDER BY dm.date ASC
-    `).all(...params) as Record<string, unknown>[]
+    `
+      )
+      .all(...params) as Record<string, unknown>[]
 
     return rows.map(row => ({
       date: row.date as string,

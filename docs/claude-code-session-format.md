@@ -21,18 +21,18 @@
 
 ```
 ~/.claude/projects/
-├── -Users-gabrielcoral--claude/
-├── -Users-gabrielcoral-Documents-meli-repos-credits-librerias-internas-kernel-skills/
+├── -Users-username--claude/
+├── -Users-username-Documents-projects-my-app/
 │   ├── 3285e038-b2d7-492b-9fab-8e9941eb45b9.jsonl
 │   ├── 39aab20d-3520-4e9d-ada9-fb219bdb2c61.jsonl
 │   └── e6f6a829-1114-4fd2-a0bc-571c8aaf53f3.jsonl
-├── -Users-gabrielcoral-Documents-meli-repos-credits-librerias-internas-kernel-skills-e9d08099/
-├── -Users-gabrielcoral-Documents-meli-repos-credits-librerias-internas-mcp-gamma-mlops/
-├── -Users-gabrielcoral-Documents-meli-repos-credits-librerias-internas-mlops-precommit-git-hook/
-├── -Users-gabrielcoral-Documents-meli-repos-credits-models-individuals-consumers-bhv-dinero-extra-mlb/
-├── -Users-gabrielcoral-Documents-meli-repos-credits-repos-pruebas-lavado-de-activos-sebcarvalho/
-├── -Users-gabrielcoral-Documents-meli-repos-credits-repos-pruebas-poc-cd-fda-automatization/
-└── -Users-gabrielcoral-Documents-meli-repos-credits-repos-pruebas-rfc-automatizacion-val-scorer/
+├── -Users-username-Documents-work-backend-api/
+├── -Users-username-Documents-work-frontend-dashboard/
+├── -Users-username-Documents-personal-blog/
+├── -Users-username-Documents-experiments-ml-model/
+├── -home-user-projects-data-pipeline/
+├── -opt-projects-legacy-system/
+└── -tmp-test-project/
 ```
 
 ---
@@ -42,16 +42,16 @@
 Claude Code convierte el path absoluto del proyecto en el nombre de carpeta así:
 
 ```
-PATH REAL:   /Users/gabrielcoral/Documents/meli-repos/credits/librerias_internas/kernel-skills
+PATH REAL:   /Users/username/Documents/projects/my-app
               ↓  cada "/" → "-",  el "/" inicial también → "-" inicial
-CARPETA:     -Users-gabrielcoral-Documents-meli-repos-credits-librerias-internas-kernel-skills
+CARPETA:     -Users-username-Documents-projects-my-app
 ```
 
 ### ⚠️ Por qué el decode es difícil
 
 - Los guiones bajos `_` del path real se preservan como `_` en la carpeta.
 - Los guiones `-` del path real se vuelven **indistinguibles** de los separadores de `/`.
-- Ejemplo: `librerias_internas` → `librerias-internas` en la carpeta (con guión, no guión bajo).
+- Ejemplo: `my_project` → `my-project` en la carpeta (con guión, no guión bajo).
 
 ### ✅ Solución correcta
 
@@ -144,7 +144,7 @@ interface BaseEntry {
   "type": "progress",
   "parentUuid": null,
   "uuid": "3456c7ef-d16c-48c3-a24a-99b6df8224c7",
-  "cwd": "/Users/gabrielcoral/Documents/meli-repos/credits/librerias_internas/kernel-skills",
+  "cwd": "/Users/username/Documents/projects/my-app",
   "sessionId": "3285e038-b2d7-492b-9fab-8e9941eb45b9",
   "gitBranch": "feature/initial-scaffolding",
   "slug": "hashed-hopping-lerdorf",
@@ -179,7 +179,7 @@ interface BaseEntry {
   "type": "user",
   "uuid": "7a6618e6-67db-4eb2-939d-38afe75275dd",
   "parentUuid": "3456c7ef-d16c-48c3-a24a-99b6df8224c7",
-  "cwd": "/Users/gabrielcoral/Documents/meli-repos/credits/librerias_internas/kernel-skills",
+  "cwd": "/Users/username/Documents/projects/my-app",
   "sessionId": "3285e038-b2d7-492b-9fab-8e9941eb45b9",
   "gitBranch": "feature/initial-scaffolding",
   "slug": "hashed-hopping-lerdorf",
@@ -189,7 +189,7 @@ interface BaseEntry {
   "type": "user",
   "message": {
     "role": "user",
-    "content": "Implement the following plan:\n\n# Implementation Plan: kernel-skills..."
+    "content": "Implement the following plan:\n\n# Implementation Plan: my-app feature..."
   },
   "timestamp": "2026-02-20T21:14:10.000Z",
   "planContent": "..."
@@ -221,7 +221,7 @@ interface BaseEntry {
   "type": "user",
   "uuid": "e1af5975-54e6-4248-a3ae-58ee25685282",
   "parentUuid": "8245f384-42d8-4c73-8f7a-2fb26638cf40",
-  "cwd": "/Users/gabrielcoral/Documents/meli-repos/credits/librerias_internas/kernel-skills",
+  "cwd": "/Users/username/Documents/projects/my-app",
   "sessionId": "3285e038-b2d7-492b-9fab-8e9941eb45b9",
   "message": {
     "role": "user",
@@ -229,7 +229,7 @@ interface BaseEntry {
       {
         "type": "tool_result",
         "tool_use_id": "toolu_01JZtvxDj3rCfNQ41FTXtKFf",
-        "content": "Exit code 1\nfatal: destination path '/tmp/fury_meli-sdd-kit' already exists",
+        "content": "Exit code 1\nfatal: destination path '/tmp/example-repo' already exists",
         "is_error": true
       }
     ]
@@ -254,7 +254,7 @@ interface BaseEntry {
   "type": "assistant",
   "uuid": "8245f384-42d8-4c73-8f7a-2fb26638cf40",
   "parentUuid": "c4c2d128-688f-443d-a958-53220c3c8492",
-  "cwd": "/Users/gabrielcoral/Documents/meli-repos/credits/librerias_internas/kernel-skills",
+  "cwd": "/Users/username/Documents/projects/my-app",
   "sessionId": "3285e038-b2d7-492b-9fab-8e9941eb45b9",
   "gitBranch": "feature/initial-scaffolding",
   "slug": "hashed-hopping-lerdorf",
@@ -266,15 +266,15 @@ interface BaseEntry {
     "content": [
       {
         "type": "thinking",
-        "thinking": "El usuario quiere que analice el repositorio..."
+        "thinking": "The user wants me to analyze the repository..."
       },
       {
         "type": "tool_use",
         "id": "toolu_01JZtvxDj3rCfNQ41FTXtKFf",
         "name": "Bash",
         "input": {
-          "command": "gh repo clone melisource/fury_meli-sdd-kit /tmp/fury_meli-sdd-kit -- --depth 1",
-          "description": "Clone fury_meli-sdd-kit repository"
+          "command": "gh repo clone example-org/example-repo /tmp/example-repo -- --depth 1",
+          "description": "Clone example repository"
         }
       }
     ],
@@ -304,7 +304,7 @@ interface BaseEntry {
     "content": [
       {
         "type": "text",
-        "text": "Excelente! He completado un análisis exhaustivo de fury_meli-sdd-kit..."
+        "text": "Great! I've completed a comprehensive analysis of the repository..."
       }
     ],
     "stop_reason": "end_turn",
@@ -322,8 +322,8 @@ interface BaseEntry {
 function getProjectName(cwd: string): string {
   return cwd.split('/').filter(Boolean).pop() ?? cwd
 }
-// cwd = "/Users/gabrielcoral/.../librerias_internas/kernel-skills"
-// → "kernel-skills"
+// cwd = "/Users/username/Documents/projects/my-app"
+// → "my-app"
 
 // ❌ INCORRECTO — no usar decode del nombre de carpeta
 function decodeProjectPath(encodedPath: string): string {

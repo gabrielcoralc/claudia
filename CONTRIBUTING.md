@@ -1,0 +1,130 @@
+# Contributing to Claudia
+
+First off, thank you for considering contributing to Claudia! 🎉
+
+## 🤝 How Can I Contribute?
+
+### Reporting Bugs
+
+Before creating bug reports, please check [existing issues](https://github.com/gabrielcoralc/claudia/issues) to avoid duplicates.
+
+Use the **[Bug Report template](https://github.com/gabrielcoralc/claudia/issues/new?template=bug_report.md)** when filing — it will guide you through providing the necessary details (steps to reproduce, environment, screenshots, etc.).
+
+### Suggesting Features
+
+Feature suggestions are welcome! Use the **[Feature Request template](https://github.com/gabrielcoralc/claudia/issues/new?template=feature_request.md)** to submit your idea.
+
+### Pull Requests
+
+1. **Fork the repo** and create a branch from `main`
+2. **Make your changes**
+   - Follow existing code style
+   - Add tests if applicable
+   - Update documentation
+3. **Test your changes** thoroughly
+4. **Commit with clear messages:**
+   ```
+   feat: add session export feature
+   fix: resolve terminal crash on exit
+   docs: update installation instructions
+   ```
+5. **Push to your fork** and submit a pull request — the **[PR template](.github/PULL_REQUEST_TEMPLATE.md)** will guide you through the process
+
+## 💻 Development Setup
+
+```bash
+# Clone your fork
+git clone https://github.com/YOUR_USERNAME/claudia.git
+cd claudia
+
+# Install dependencies
+npm install
+
+# Rebuild native modules
+npm run postinstall
+
+# Start development server
+npm run dev
+```
+
+## 🏗 Project Structure
+
+```
+src/
+├── main/              # Electron main process (Node.js)
+│   ├── services/      # Database, FileWatcher, TerminalService, AutoUpdater, etc.
+│   ├── ipc/           # IPC handlers for renderer communication
+│   ├── setup/         # Claude hooks setup
+│   └── index.ts       # Main process entry point
+├── preload/           # Preload scripts (IPC bridge via contextBridge)
+├── renderer/          # React frontend (browser sandbox)
+│   ├── src/
+│   │   ├── components/  # UI components
+│   │   │   ├── Analytics/  # Analytics dashboard
+│   │   │   ├── Chat/       # Message display components
+│   │   │   ├── Layout/     # Sidebar, panels, dialogs
+│   │   │   └── Session/    # Session controls, tabs
+│   │   ├── stores/      # Zustand state management
+│   │   └── utils/       # Helper functions
+└── shared/            # Shared TypeScript types (Session, ClaudeMessage, etc.)
+
+docs/                  # Detailed technical documentation
+├── context-renderer.md     # Frontend architecture
+├── context-services.md     # Backend services
+├── context-ipc.md          # IPC communication
+└── context-types.md        # TypeScript interfaces
+```
+
+**Key areas:**
+- **Services** (`src/main/services/`) - Core backend logic
+- **Components** (`src/renderer/src/components/`) - React UI components
+- **Stores** (`src/renderer/src/stores/`) - Zustand state management
+- **IPC handlers** (`src/main/ipc/`) - Bridge between main and renderer
+
+## ✅ Code Style
+
+- **TypeScript** - All code must be typed
+- **ESLint** - Run `npm run lint` before committing
+- **Formatting** - Use existing conventions
+- **Comments** - Add comments for complex logic
+
+## 🧪 Testing
+
+```bash
+# Run tests
+npm test
+
+# Watch mode
+npm run test:watch
+```
+
+## 📝 Commit Guidelines
+
+Use conventional commits:
+- `feat:` - New features
+- `fix:` - Bug fixes
+- `docs:` - Documentation changes
+- `style:` - Code style changes (formatting)
+- `refactor:` - Code refactoring
+- `test:` - Adding tests
+- `chore:` - Maintenance tasks
+
+## 🚀 Release Process
+
+Releases are handled by maintainers:
+1. Update version in `package.json`
+2. Update CHANGELOG.md
+3. Create git tag
+4. Build and publish release
+
+## 📜 License
+
+By contributing, you agree that your contributions will be licensed under the MIT License.
+
+## ❓ Questions?
+
+Feel free to open an issue for questions or discussions!
+
+---
+
+Thank you for contributing! 🙌

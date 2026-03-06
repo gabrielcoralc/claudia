@@ -1,9 +1,20 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { formatNumber, formatCost } from '../../utils/format'
 import type { AnalyticsFilters, ProjectMetrics, EntityDailyMetrics } from '../../../../shared/types'
 
-const COLORS = ['#D97757', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1']
+const COLORS = [
+  '#D97757',
+  '#3b82f6',
+  '#10b981',
+  '#f59e0b',
+  '#8b5cf6',
+  '#ec4899',
+  '#06b6d4',
+  '#84cc16',
+  '#f97316',
+  '#6366f1'
+]
 
 interface Props {
   filters: AnalyticsFilters
@@ -103,7 +114,7 @@ export default function ProjectsTab({ filters }: Props): React.JSX.Element {
           </thead>
           <tbody>
             {projects.map((project, idx) => (
-              <tr 
+              <tr
                 key={project.projectPath}
                 className="border-b border-claude-border hover:bg-claude-hover transition-colors"
               >
@@ -113,21 +124,15 @@ export default function ProjectsTab({ filters }: Props): React.JSX.Element {
                     <span className="text-claude-text truncate max-w-[250px]">{project.projectName}</span>
                   </div>
                 </td>
-                <td className="py-3 pr-4 text-right text-claude-muted font-mono">
-                  {project.sessionCount}
-                </td>
-                <td className="py-3 pr-4 text-right font-mono text-claude-orange">
-                  {formatCost(project.totalCost)}
-                </td>
+                <td className="py-3 pr-4 text-right text-claude-muted font-mono">{project.sessionCount}</td>
+                <td className="py-3 pr-4 text-right font-mono text-claude-orange">{formatCost(project.totalCost)}</td>
                 <td className="py-3 pr-4 text-right text-claude-muted font-mono">
                   {formatNumber(project.totalInputTokens)}
                 </td>
                 <td className="py-3 pr-4 text-right text-claude-muted font-mono">
                   {formatNumber(project.totalOutputTokens)}
                 </td>
-                <td className="py-3 text-right text-claude-muted font-mono">
-                  {formatNumber(project.totalTokens)}
-                </td>
+                <td className="py-3 text-right text-claude-muted font-mono">{formatNumber(project.totalTokens)}</td>
               </tr>
             ))}
           </tbody>
@@ -140,27 +145,48 @@ export default function ProjectsTab({ filters }: Props): React.JSX.Element {
           <h3 className="text-sm font-semibold text-claude-text mb-4">Daily Input Tokens by Project</h3>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={tokenChartData}>
-              <XAxis dataKey="date" stroke="#8E8E93" style={{ fontSize: '11px' }}
-                tickFormatter={(v) => { const d = new Date(v); return `${d.getMonth()+1}/${d.getDate()}` }} />
-              <YAxis stroke="#8E8E93" style={{ fontSize: '11px' }} tickFormatter={(v) => formatNumber(v)} />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#1C1C1E', border: '1px solid #2C2C2E', borderRadius: '8px', fontSize: '12px' }}
-                labelStyle={{ color: '#F5F5F5' }}
-                formatter={(value: number, name: string) => {
-                  const projectPath = name.replace('_input', '')
-                  const projectName = projectNames.get(projectPath) || projectPath
-                  return [formatNumber(value), projectName]
+              <XAxis
+                dataKey="date"
+                stroke="#8E8E93"
+                style={{ fontSize: '11px' }}
+                tickFormatter={v => {
+                  const d = new Date(v)
+                  return `${d.getMonth() + 1}/${d.getDate()}`
                 }}
               />
-              <Legend wrapperStyle={{ fontSize: '11px' }}
-                formatter={(value) => {
+              <YAxis stroke="#8E8E93" style={{ fontSize: '11px' }} tickFormatter={v => formatNumber(v)} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#1C1C1E',
+                  border: '1px solid #2C2C2E',
+                  borderRadius: '8px',
+                  fontSize: '12px'
+                }}
+                labelStyle={{ color: '#F5F5F5' }}
+                formatter={
+                  ((value: number, name: string) => {
+                    const projectPath = name.replace('_input', '')
+                    const projectName = projectNames.get(projectPath) || projectPath
+                    return [formatNumber(value), projectName]
+                  }) as never
+                }
+              />
+              <Legend
+                wrapperStyle={{ fontSize: '11px' }}
+                formatter={value => {
                   const projectPath = value.replace('_input', '')
                   return projectNames.get(projectPath) || projectPath
-                }} />
+                }}
+              />
               {projects.map((p, idx) => (
-                <Line key={p.projectPath} type="monotone" dataKey={`${p.projectPath}_input`}
-                  stroke={COLORS[idx % COLORS.length]} strokeWidth={2}
-                  dot={{ fill: COLORS[idx % COLORS.length], r: 3 }} />
+                <Line
+                  key={p.projectPath}
+                  type="monotone"
+                  dataKey={`${p.projectPath}_input`}
+                  stroke={COLORS[idx % COLORS.length]}
+                  strokeWidth={2}
+                  dot={{ fill: COLORS[idx % COLORS.length], r: 3 }}
+                />
               ))}
             </LineChart>
           </ResponsiveContainer>
@@ -173,27 +199,48 @@ export default function ProjectsTab({ filters }: Props): React.JSX.Element {
           <h3 className="text-sm font-semibold text-claude-text mb-4">Daily Output Tokens by Project</h3>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={tokenChartData}>
-              <XAxis dataKey="date" stroke="#8E8E93" style={{ fontSize: '11px' }}
-                tickFormatter={(v) => { const d = new Date(v); return `${d.getMonth()+1}/${d.getDate()}` }} />
-              <YAxis stroke="#8E8E93" style={{ fontSize: '11px' }} tickFormatter={(v) => formatNumber(v)} />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#1C1C1E', border: '1px solid #2C2C2E', borderRadius: '8px', fontSize: '12px' }}
-                labelStyle={{ color: '#F5F5F5' }}
-                formatter={(value: number, name: string) => {
-                  const projectPath = name.replace('_output', '')
-                  const projectName = projectNames.get(projectPath) || projectPath
-                  return [formatNumber(value), projectName]
+              <XAxis
+                dataKey="date"
+                stroke="#8E8E93"
+                style={{ fontSize: '11px' }}
+                tickFormatter={v => {
+                  const d = new Date(v)
+                  return `${d.getMonth() + 1}/${d.getDate()}`
                 }}
               />
-              <Legend wrapperStyle={{ fontSize: '11px' }}
-                formatter={(value) => {
+              <YAxis stroke="#8E8E93" style={{ fontSize: '11px' }} tickFormatter={v => formatNumber(v)} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#1C1C1E',
+                  border: '1px solid #2C2C2E',
+                  borderRadius: '8px',
+                  fontSize: '12px'
+                }}
+                labelStyle={{ color: '#F5F5F5' }}
+                formatter={
+                  ((value: number, name: string) => {
+                    const projectPath = name.replace('_output', '')
+                    const projectName = projectNames.get(projectPath) || projectPath
+                    return [formatNumber(value), projectName]
+                  }) as never
+                }
+              />
+              <Legend
+                wrapperStyle={{ fontSize: '11px' }}
+                formatter={value => {
                   const projectPath = value.replace('_output', '')
                   return projectNames.get(projectPath) || projectPath
-                }} />
+                }}
+              />
               {projects.map((p, idx) => (
-                <Line key={p.projectPath} type="monotone" dataKey={`${p.projectPath}_output`}
-                  stroke={COLORS[idx % COLORS.length]} strokeWidth={2}
-                  dot={{ fill: COLORS[idx % COLORS.length], r: 3 }} />
+                <Line
+                  key={p.projectPath}
+                  type="monotone"
+                  dataKey={`${p.projectPath}_output`}
+                  stroke={COLORS[idx % COLORS.length]}
+                  strokeWidth={2}
+                  dot={{ fill: COLORS[idx % COLORS.length], r: 3 }}
+                />
               ))}
             </LineChart>
           </ResponsiveContainer>
@@ -206,20 +253,38 @@ export default function ProjectsTab({ filters }: Props): React.JSX.Element {
           <h3 className="text-sm font-semibold text-claude-text mb-4">Daily Cost by Project</h3>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={chartData}>
-              <XAxis dataKey="date" stroke="#8E8E93" style={{ fontSize: '11px' }}
-                tickFormatter={(v) => { const d = new Date(v); return `${d.getMonth()+1}/${d.getDate()}` }} />
-              <YAxis stroke="#8E8E93" style={{ fontSize: '11px' }} tickFormatter={(v) => `$${v.toFixed(2)}`} />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#1C1C1E', border: '1px solid #2C2C2E', borderRadius: '8px', fontSize: '12px' }}
-                labelStyle={{ color: '#F5F5F5' }}
-                formatter={(value: number, name: string) => [`$${value.toFixed(4)}`, projectNames.get(name) || name]}
+              <XAxis
+                dataKey="date"
+                stroke="#8E8E93"
+                style={{ fontSize: '11px' }}
+                tickFormatter={v => {
+                  const d = new Date(v)
+                  return `${d.getMonth() + 1}/${d.getDate()}`
+                }}
               />
-              <Legend wrapperStyle={{ fontSize: '11px' }}
-                formatter={(value) => projectNames.get(value) || value} />
+              <YAxis stroke="#8E8E93" style={{ fontSize: '11px' }} tickFormatter={v => `$${v.toFixed(2)}`} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#1C1C1E',
+                  border: '1px solid #2C2C2E',
+                  borderRadius: '8px',
+                  fontSize: '12px'
+                }}
+                labelStyle={{ color: '#F5F5F5' }}
+                formatter={
+                  ((value: number, name: string) => [`$${value.toFixed(4)}`, projectNames.get(name) || name]) as never
+                }
+              />
+              <Legend wrapperStyle={{ fontSize: '11px' }} formatter={value => projectNames.get(value) || value} />
               {projects.map((p, idx) => (
-                <Line key={p.projectPath} type="monotone" dataKey={p.projectPath}
-                  stroke={COLORS[idx % COLORS.length]} strokeWidth={2}
-                  dot={{ fill: COLORS[idx % COLORS.length], r: 3 }} />
+                <Line
+                  key={p.projectPath}
+                  type="monotone"
+                  dataKey={p.projectPath}
+                  stroke={COLORS[idx % COLORS.length]}
+                  strokeWidth={2}
+                  dot={{ fill: COLORS[idx % COLORS.length], r: 3 }}
+                />
               ))}
             </LineChart>
           </ResponsiveContainer>

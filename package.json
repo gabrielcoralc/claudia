@@ -1,6 +1,6 @@
 {
   "name": "claudia",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "A macOS UI for Claude Code - visual session management, chat history, and cost tracking",
   "main": "./out/main/index.js",
   "author": "gabrielcoral",
@@ -15,12 +15,22 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepare": "husky",
+    "security:audit": "npm audit --registry=https://registry.npmjs.org/ --production",
+    "security:check": "npm run security:audit && npm run lint && npm run typecheck"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ]
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
     "better-sqlite3": "^11.0.0",
+    "cheerio": "^1.2.0",
     "chokidar": "^3.6.0",
     "electron-updater": "^6.1.7",
     "node-pty": "^1.0.0",
@@ -44,7 +54,10 @@
     "electron-builder": "^24.13.3",
     "electron-vite": "^2.1.0",
     "eslint": "^8.57.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
     "postcss": "^8.4.35",
+    "prettier": "^3.8.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "tailwindcss": "^3.4.1",
@@ -65,7 +78,7 @@
     "date-fns": "^3.6.0",
     "lucide-react": "^0.368.0",
     "react-markdown": "^9.0.1",
-    "react-syntax-highlighter": "^15.5.0",
+    "react-syntax-highlighter": "^16.1.0",
     "remark-gfm": "^4.0.0",
     "tailwind-merge": "^2.2.1",
     "zustand": "^4.5.2"

@@ -1,0 +1,13 @@
+echo "🔍 Running pre-commit checks..."
+
+# Lint staged files
+npx lint-staged
+
+# Run type checking
+npm run typecheck
+
+# Security audit (production dependencies only)
+echo "\n🔒 Checking for vulnerabilities in production dependencies..."
+npm run security:audit
+
+echo "✅ Pre-commit checks passed!"

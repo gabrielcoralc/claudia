@@ -24,12 +24,17 @@ module.exports = {
       animation: {
         'fade-in': 'fadeIn 0.2s ease-in-out',
         'slide-in': 'slideIn 0.2s ease-out',
-        'pulse-dot': 'pulseDot 1.5s ease-in-out infinite'
+        'pulse-dot': 'pulseDot 1.5s ease-in-out infinite',
+        'terminal-glow': 'terminalGlow 2s ease-in-out infinite'
       },
       keyframes: {
         fadeIn: { '0%': { opacity: 0 }, '100%': { opacity: 1 } },
         slideIn: { '0%': { transform: 'translateX(-8px)', opacity: 0 }, '100%': { transform: 'translateX(0)', opacity: 1 } },
-        pulseDot: { '0%, 100%': { opacity: 1 }, '50%': { opacity: 0.3 } }
+        pulseDot: { '0%, 100%': { opacity: 1 }, '50%': { opacity: 0.3 } },
+        terminalGlow: {
+          '0%, 100%': { borderColor: '#D97757', boxShadow: '0 0 8px 2px rgba(217,119,87,0.5)' },
+          '50%': { borderColor: '#22c55e', boxShadow: '0 0 8px 2px rgba(34,197,94,0.5)' }
+        }
       }
     }
   },

@@ -5,6 +5,7 @@
     "composite": true,
     "types": ["electron-vite/node"],
     "baseUrl": ".",
+    "resolveJsonModule": true,
     "paths": {
       "@main/*": ["src/main/*"],
       "@shared/*": ["src/shared/*"]

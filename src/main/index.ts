@@ -5,9 +5,12 @@ import { registerIpcHandlers, cleanupProcesses } from './ipc/handlers'
 import { killAllTerminals } from './services/TerminalService'
 import { startFileWatcher, stopFileWatcher } from './services/FileWatcher'
 import { startHooksServer, stopHooksServer } from './services/HooksServer'
-import { closeDb, settingsDb } from './services/Database'
+import { closeDb, settingsDb, getDb, sessionDb } from './services/Database'
+import { parseTranscriptFile } from './services/SessionParser'
 import { installHooks } from './setup/claudeHooks'
 import { setupAutoUpdater, stopAutoUpdater } from './services/AutoUpdater'
+import { getPricingService } from './services/PricingService'
+import { setMainWindow } from './services/WindowManager'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -36,7 +39,13 @@ function createWindow(): BrowserWindow {
     mainWindow?.show()
   })
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
+  mainWindow.on('closed', () => {
+    killAllTerminals()
+    mainWindow = null
+    setMainWindow(null)
+  })
+
+  mainWindow.webContents.setWindowOpenHandler(details => {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
@@ -60,27 +69,83 @@ app.whenReady().then(async () => {
   })
 
   const win = createWindow()
+  setMainWindow(win)
 
-  registerIpcHandlers(win)
+  registerIpcHandlers()
 
   const settings = settingsDb.get()
 
+  // Initialize pricing service and attempt to update from web (non-blocking)
+  const pricingService = getPricingService()
+  await pricingService.initialize()
+  pricingService.updatePricingFromWeb().then(result => {
+    if (result.success) {
+      console.log('✅ Pricing updated successfully from Anthropic website')
+    } else {
+      console.log('ℹ️  Using cached pricing data:', result.error)
+    }
+  })
+
   if (settings.hooksEnabled) {
-    startHooksServer(win, settings.hooksServerPort)
+    startHooksServer(settings.hooksServerPort)
     installHooks()
   }
 
-  await startFileWatcher(win)
+  await startFileWatcher()
+
+  // One-time migration: recalculate session costs after fixing double-counting + pricing bugs
+  runCostRecalcMigration().catch(err => console.warn('[Migration] Cost recalc failed:', err))
 
   // Configurar auto-updater
-  setupAutoUpdater(win)
+  setupAutoUpdater()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
+      const newWin = createWindow()
+      setMainWindow(newWin)
     }
   })
 })
+
+/**
+ * One-time migration: recalculate all session costs using the fixed parser
+ * (deduplicates streaming entries + correct pricing). Runs only once —
+ * stores a flag in the settings table so it never re-runs.
+ */
+async function runCostRecalcMigration(): Promise<void> {
+  const MIGRATION_KEY = 'migration_cost_recalc_v1'
+  const db = getDb()
+
+  const existing = db.prepare('SELECT key FROM settings WHERE key = ?').get(MIGRATION_KEY)
+  if (existing) return // already migrated
+
+  console.log('[Migration] Recalculating session costs (one-time fix for double-counting + pricing bugs)...')
+
+  const sessions = sessionDb.list()
+  let updated = 0
+
+  for (const session of sessions) {
+    try {
+      if (!session.transcriptPath) continue
+      const { costSummary } = await parseTranscriptFile(session.transcriptPath)
+
+      sessionDb.updateCost(session.id, {
+        totalCostUsd: costSummary.totalCostUsd ?? 0,
+        totalInputTokens: costSummary.totalInputTokens ?? 0,
+        totalOutputTokens: costSummary.totalOutputTokens ?? 0,
+        cacheReadTokens: costSummary.cacheReadTokens ?? 0,
+        cacheCreationTokens: costSummary.cacheCreationTokens ?? 0
+      })
+      updated++
+    } catch (err) {
+      console.warn(`[Migration] Failed to recalculate session ${session.id}:`, err)
+    }
+  }
+
+  // Mark migration as done
+  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(MIGRATION_KEY, 'done')
+  console.log(`[Migration] Recalculated costs for ${updated}/${sessions.length} sessions`)
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
