@@ -1,97 +1,52 @@
 <div align="center">
 
-# 👓 Claudia
+<img alt="Claudia - Professional Session Manager for Claude Code" src="docs/banner.png" width="100%">
 
-### Professional Session Manager for Claude Code
+<br/>
 
-A beautiful macOS desktop application for managing, tracking, and analyzing your Claude Code development sessions with full analytics and cost monitoring.
+<!-- Tech Stack Badges -->
+[![macOS](https://img.shields.io/badge/macOS-000000?style=for-the-badge&logo=apple&logoColor=white)](https://www.apple.com/macos/) [![Electron](https://img.shields.io/badge/Electron-2B2E3A?style=for-the-badge&logo=electron&logoColor=9FEAF9)](https://www.electronjs.org/) [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/) [![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/) [![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/) [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 
-[![macOS](https://img.shields.io/badge/macOS-000000?style=for-the-badge&logo=apple&logoColor=white)](https://www.apple.com/macos/)
-[![Electron](https://img.shields.io/badge/Electron-2B2E3A?style=for-the-badge&logo=electron&logoColor=9FEAF9)](https://www.electronjs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
+<!-- Project Info Badges -->
+[![GitHub Release](https://img.shields.io/github/v/release/gabrielcoralc/claudia?style=flat-square&color=blue&label=Release)](https://github.com/gabrielcoralc/claudia/releases) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](https://github.com/gabrielcoralc/claudia/blob/main/LICENSE) [![GitHub Stars](https://img.shields.io/github/stars/gabrielcoralc/claudia?style=flat-square&color=gold)](https://github.com/gabrielcoralc/claudia/stargazers) [![GitHub Last Commit](https://img.shields.io/github/last-commit/gabrielcoralc/claudia?style=flat-square&color=purple)](https://github.com/gabrielcoralc/claudia/commits/main) [![GitHub Issues](https://img.shields.io/github/issues/gabrielcoralc/claudia?style=flat-square)](https://github.com/gabrielcoralc/claudia/issues) [![Security Check](https://img.shields.io/github/actions/workflow/status/gabrielcoralc/claudia/security-check.yml?style=flat-square&label=Security%20Check)](https://github.com/gabrielcoralc/claudia/actions)
 
-[Features](#-features) • [Installation](#-installation) • [Building](#-building-from-source) • [Usage](#-usage) • [Tech Stack](#-tech-stack)
+<br/>
+
+[Discover Claudia](#-discover-claudia) • [Installation](#-installation) • [Features](#-features) • [Usage](#-usage) • [Building](#-building-from-source) • [Tech Stack](#-tech-stack) • [Roadmap](#-roadmap)
 
 </div>
 
 ---
 
-## ✨ Features
+## Discover Claudia
 
-### 🎯 Managed Sessions
-- **Launch Claude Code directly** from Claudia with automatic tracking
-- **Smart organization** by project and branch
-- **Duplicate prevention** - unique session names per project/branch
-- **Session controls** - Update branch, delete sessions, and more
-- **Subsession tracking** - Automatic parent-child tracking when `/clear` is used
+<div align="center">
 
-### 📊 Analytics Dashboard
-- **Interactive charts** - Daily cost trends, project comparison, session distribution
-- **Cost tracking** - Monitor token usage and costs per session
-- **Usage metrics** - Input/output tokens, message count, session duration
-- **Project analytics** - Compare costs and usage across projects
-- **Daily breakdowns** - Track spending trends over time
-- **Date filtering** - Last 7/30/90 days, or custom date ranges
-- **Powered by Recharts** - Beautiful, responsive data visualization
+### Session Management
+> Launch, track, and manage multiple Claude Code sessions from a single interface
 
-### 📥 Session Import
-- **Import external sessions** - Bring in Claude Code sessions not started from Claudia
-- **Smart filtering** - Filter by project and branch before importing
-- **4-step wizard** - Guided import process with validation
-- **Incremental parsing** - Fast import with prompt caching support
-- **Session validation** - Automatic validation and naming with conflict detection
-- **Batch operations** - View and select from multiple external sessions
+<!-- Replace with actual GIF/screenshot: docs/screenshots/session-management.gif -->
+<img src="https://placehold.co/800x450/1a1a2e/d4745f?text=Session+Management&font=raleway" alt="Session Management" width="80%"/>
 
-### 💻 Integrated Terminal
-- **Built-in terminal** for each session
-- **Live output** - Watch Claude work in real-time
-- **Session isolation** - Each session has its own terminal instance
-- **Resume sessions** - Pick up where you left off
-- **Multiple terminals** - Run multiple sessions concurrently
-- **Smart terminal bubble** - Sticky chat bubble to toggle terminal visibility with animated glow
+<br/><br/>
 
-### 🔍 Session Management
-- **Chat history** - Browse complete conversation logs
-- **Code changes** - Track all file modifications
-- **Tool usage** - See every tool Claude uses
-- **Session info** - Metadata, costs, and statistics
-- **Real-time activity** - Live updates on session status
+### Live Terminal & Chat
+> Watch Claude work in real-time with integrated terminal and conversation history
 
-### 🔄 Auto-Updates
-- **Automatic update checks** - Stay up to date with latest features
-- **GitHub releases integration** - Download directly from official releases
-- **Background downloads** - Updates download while you work
-- **Progress tracking** - See download progress and speed
-- **One-click install** - Update in seconds
+<!-- Replace with actual GIF/screenshot: docs/screenshots/terminal-chat.gif -->
+<img src="https://placehold.co/800x450/1a1a2e/d4745f?text=Live+Terminal+%26+Chat&font=raleway" alt="Live Terminal & Chat" width="80%"/>
 
-### 🧙 First-Run Setup Wizard
-- **Guided onboarding** - Projects root directory selection on first launch
-- **Folder picker** with validation and example path hints
-- **Seamless start** - Get up and running in seconds
-
-### 🎨 Modern UI
-- **Dark theme** optimized for long coding sessions
-- **Clean interface** - Focus on what matters
-- **Responsive design** - Adapts to your workflow
-- **Keyboard shortcuts** - Fast navigation
-- **Enhanced message display** - Command badges, plan bubbles, interactive questions
-- **Confirmation dialogs** - Safety prompts for destructive operations
-
----
-
-## 📸 Screenshots
-
-### Welcome Screen
-> Clean and informative dashboard showing session management capabilities
-
-### Session View
-> Live terminal, chat history, and code changes in one view
+<br/><br/>
 
 ### Analytics Dashboard
-> Comprehensive cost tracking and usage metrics
+> Track estimated costs, token usage, and project metrics with interactive charts
 
-*Screenshots coming soon*
+<!-- Replace with actual GIF/screenshot: docs/screenshots/analytics.gif -->
+<img src="https://placehold.co/800x450/1a1a2e/d4745f?text=Analytics+Dashboard&font=raleway" alt="Analytics Dashboard" width="80%"/>
+
+</div>
+
+> 💡 **Tip:** Replace the placeholders above with actual GIFs/screenshots saved to `docs/screenshots/`.
 
 ---
 
@@ -170,15 +125,84 @@ Apple Developer certificates cost $99/year. As a free, open-source project, we d
 
 ---
 
-### Option 2: Homebrew Cask (Coming Soon)
-
-```bash
-brew install --cask claudia
-```
-
-### Option 3: Build from Source
+### Option 2: Build from Source
 
 See [Building from Source](#-building-from-source) below.
+
+---
+
+## ✨ Features
+
+### 🎯 Managed Sessions
+- **Launch Claude Code directly** from Claudia with automatic tracking
+- **Smart organization** by project and branch
+- **Duplicate prevention** - unique session names per project/branch
+- **Session controls** - Update branch, delete sessions, and more
+- **Subsession tracking** - Automatic parent-child tracking when `/clear` is used
+
+### 🔀 Multisession Support
+- **Run multiple sessions concurrently** - Work on different projects or branches at the same time
+- **Independent terminals** - Each session has its own isolated terminal instance
+- **Parallel tracking** - All sessions are tracked simultaneously with real-time updates
+- **Session switching** - Quickly navigate between active sessions from the sidebar
+
+### 📊 Analytics Dashboard
+- **Interactive charts** - Daily cost trends, project comparison, session distribution
+- **Cost tracking** - Monitor token usage and costs per session
+- **Usage metrics** - Input/output tokens, message count, session duration
+- **Project analytics** - Compare costs and usage across projects
+- **Daily breakdowns** - Track spending trends over time
+- **Date filtering** - Last 7/30/90 days, or custom date ranges
+- **Powered by Recharts** - Beautiful, responsive data visualization
+
+### 💰 Estimated Cost Tracking
+- **API-based pricing** - Costs are estimated using the official [Anthropic API pricing](https://docs.anthropic.com/en/docs/about-claude/pricing)
+- **Auto-updated rates** - Pricing data is automatically refreshed from Anthropic's pricing page on app startup
+- **Per-token breakdown** - Input, output, cache read, and cache write tokens tracked separately
+- **Multi-model support** - Accurate pricing for Opus, Sonnet, and Haiku models
+- **⚠️ Important** - Costs shown are **estimates** based on API pricing and may not reflect your actual billing, especially if you use Claude Code with a subscription plan
+
+### 📥 Session Import
+- **Import external sessions** - Bring in Claude Code sessions not started from Claudia
+- **Smart filtering** - Filter by project and branch before importing
+- **4-step wizard** - Guided import process with validation
+- **Incremental parsing** - Fast import with prompt caching support
+- **Session validation** - Automatic validation and naming with conflict detection
+- **Batch operations** - View and select from multiple external sessions
+
+### 💻 Integrated Terminal
+- **Built-in terminal** for each session
+- **Live output** - Watch Claude work in real-time
+- **Session isolation** - Each session has its own terminal instance
+- **Resume sessions** - Pick up where you left off
+- **Smart terminal bubble** - Sticky chat bubble to toggle terminal visibility with animated glow
+
+### 🔍 Session Management
+- **Chat history** - Browse complete conversation logs
+- **Code changes** - Track all file modifications
+- **Tool usage** - See every tool Claude uses
+- **Session info** - Metadata, costs, and statistics
+- **Real-time activity** - Live updates on session status
+
+### 🔄 Auto-Updates
+- **Automatic update checks** - Stay up to date with latest features
+- **GitHub releases integration** - Download directly from official releases
+- **Background downloads** - Updates download while you work
+- **Progress tracking** - See download progress and speed
+- **One-click install** - Update in seconds
+
+### 🧙 First-Run Setup Wizard
+- **Guided onboarding** - Projects root directory selection on first launch
+- **Folder picker** with validation and example path hints
+- **Seamless start** - Get up and running in seconds
+
+### 🎨 Modern UI
+- **Dark theme** optimized for long coding sessions
+- **Clean interface** - Focus on what matters
+- **Responsive design** - Adapts to your workflow
+- **Keyboard shortcuts** - Fast navigation
+- **Enhanced message display** - Command badges, plan bubbles, interactive questions
+- **Confirmation dialogs** - Safety prompts for destructive operations
 
 ---
 
@@ -359,32 +383,7 @@ claudia/
 
 ## 🤝 Contributing
 
-Contributions are welcome! This is an open source project.
-
-### How to Contribute
-
-1. **Fork the repository**
-2. **Create a feature branch**
-   ```bash
-   git checkout -b feature/amazing-feature
-   ```
-3. **Make your changes**
-4. **Commit with clear messages**
-   ```bash
-   git commit -m "feat: add amazing feature"
-   ```
-5. **Push to your fork**
-   ```bash
-   git push origin feature/amazing-feature
-   ```
-6. **Open a Pull Request**
-
-### Development Guidelines
-
-- Follow the existing code style (ESLint + TypeScript)
-- Add tests for new features
-- Update documentation as needed
-- Keep commits atomic and well-described
+Contributions are welcome! Please read our **[Contributing Guide](CONTRIBUTING.md)** for details on how to get started, report bugs, suggest features, and submit pull requests.
 
 ---
 
@@ -399,14 +398,6 @@ Contributions are welcome! This is an open source project.
 ## 📝 License
 
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
-
----
-
-## 👤 Author
-
-**Gabriel Coral**
-
-- GitHub: [@gabrielcoralc](https://github.com/gabrielcoralc)
 
 ---
 
@@ -445,6 +436,14 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 - [ ] Session sharing/collaboration
 - [ ] Cloud sync (optional)
 - [ ] Team workspaces
+
+---
+
+## 👤 Author
+
+**Gabriel Coral**
+
+- GitHub: [@gabrielcoralc](https://github.com/gabrielcoralc)
 
 ---
 

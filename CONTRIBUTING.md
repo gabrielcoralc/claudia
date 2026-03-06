@@ -6,24 +6,13 @@ First off, thank you for considering contributing to Claudia! 🎉
 
 ### Reporting Bugs
 
-Before creating bug reports, please check existing issues to avoid duplicates.
+Before creating bug reports, please check [existing issues](https://github.com/gabrielcoralc/claudia/issues) to avoid duplicates.
 
-**When filing a bug report, include:**
-- **Clear title** describing the issue
-- **Steps to reproduce** the behavior
-- **Expected behavior** vs actual behavior
-- **Screenshots** if applicable
-- **Environment details:**
-  - macOS version
-  - Claudia version
-  - Chip (Intel/Apple Silicon)
+Use the **[Bug Report template](https://github.com/gabrielcoralc/claudia/issues/new?template=bug_report.md)** when filing — it will guide you through providing the necessary details (steps to reproduce, environment, screenshots, etc.).
 
 ### Suggesting Features
 
-Feature suggestions are welcome! Please:
-- **Explain the use case** - why would this be useful?
-- **Describe the feature** - what should it do?
-- **Consider alternatives** - are there other ways to solve this?
+Feature suggestions are welcome! Use the **[Feature Request template](https://github.com/gabrielcoralc/claudia/issues/new?template=feature_request.md)** to submit your idea.
 
 ### Pull Requests
 
@@ -39,7 +28,7 @@ Feature suggestions are welcome! Please:
    fix: resolve terminal crash on exit
    docs: update installation instructions
    ```
-5. **Push to your fork** and submit a pull request
+5. **Push to your fork** and submit a pull request — the **[PR template](.github/PULL_REQUEST_TEMPLATE.md)** will guide you through the process
 
 ## 💻 Development Setup
 
