@@ -19,6 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.2] - 2026-03-06
+
+### Bug Fixes
+- **CI publish error on merge** — Fixed `electron-builder` failing with `GH_TOKEN` error when the build check job runs on `main` after merge. Added `--publish never` to the dry-run package step.
+- **Auto-updater restart on macOS** — Fixed `quitAndInstall` not restarting the app after downloading an update. The `window-all-closed` handler was preventing macOS from quitting; now removed before restart.
+
+### Features
+- **App version in sidebar** — Added version display (`Claudia vX.X.X`) at the bottom of the sidebar so users can easily check which version is installed.
+
+---
+
 ## [1.0.1] - 2026-03-06
 
 ### Bug Fixes
