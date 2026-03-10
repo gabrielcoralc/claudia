@@ -4,6 +4,7 @@ import MessageBubble from './MessageBubble'
 import AssistantTurnBubble from './AssistantTurnBubble'
 import QuestionAnswerBubble from './QuestionAnswerBubble'
 import { groupMessages, classifyMessage } from '../../utils/messageGrouper'
+import { scrollSyncManager } from '../../utils/scrollSync'
 import type { Session, ClaudeMessage } from '../../../../shared/types'
 import type { ClaudeToolUseContent } from '../../../../shared/types'
 import {
@@ -308,7 +309,58 @@ export default function ChatTab({ session }: Props): React.JSX.Element {
     if (!containerRef.current) return
     const { scrollTop, scrollHeight, clientHeight } = containerRef.current
     setAutoScroll(scrollHeight - scrollTop - clientHeight < 100)
+
+    // Sync scroll with terminal (always enabled)
+    // Skip if we're currently syncing OR if an animation is in progress
+    if (scrollSyncManager.isSyncing() || scrollSyncManager.isAnimating()) {
+      return
+    }
+
+    if (scrollHeight > clientHeight) {
+      // Try to acquire sync lock for chat-initiated scroll
+      if (!scrollSyncManager.startSync('chat')) {
+        return // Another sync is in progress
+      }
+
+      const scrollPercentage = scrollTop / (scrollHeight - clientHeight)
+      window.dispatchEvent(
+        new CustomEvent('chat:scroll', {
+          detail: { sessionId: session.id, percentage: scrollPercentage }
+        })
+      )
+    }
   }
+
+  // Listen for terminal scroll events
+  useEffect(() => {
+    const handleTerminalScroll = (event: Event) => {
+      const customEvent = event as CustomEvent<{ sessionId: string; percentage: number }>
+      if (customEvent.detail.sessionId !== session.id || !containerRef.current) return
+
+      // Try to acquire sync lock for terminal-initiated scroll
+      if (!scrollSyncManager.startSync('terminal')) {
+        return // Sync already in progress from another source
+      }
+
+      // Use requestAnimationFrame for smooth rendering
+      requestAnimationFrame(() => {
+        if (!containerRef.current) return
+        const { scrollHeight, clientHeight } = containerRef.current
+        const targetScroll = customEvent.detail.percentage * (scrollHeight - clientHeight)
+        containerRef.current.scrollTop = targetScroll
+      })
+    }
+
+    window.addEventListener('terminal:scroll', handleTerminalScroll)
+    return () => window.removeEventListener('terminal:scroll', handleTerminalScroll)
+  }, [session.id])
+
+  // Cleanup scroll sync state on unmount
+  useEffect(() => {
+    return () => {
+      scrollSyncManager.reset()
+    }
+  }, [])
 
   const handleToggleFilter = (filter: FilterType) => {
     setActiveFilters(prev => {
@@ -375,6 +427,8 @@ export default function ChatTab({ session }: Props): React.JSX.Element {
           <button
             onClick={() => {
               setAutoScroll(true)
+              // Mark start of animation to prevent scroll sync from interrupting
+              scrollSyncManager.startAnimation()
               bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
             }}
             className="sticky bottom-4 float-right bg-claude-orange text-white text-xs px-3 py-1.5 rounded-full shadow-lg hover:opacity-90 transition-opacity"

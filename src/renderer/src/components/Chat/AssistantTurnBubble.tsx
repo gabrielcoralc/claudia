@@ -469,7 +469,7 @@ export default function AssistantTurnBubble({ turn }: Props): React.JSX.Element 
         )}
       </div>
 
-      <div className="flex-1 max-w-3xl flex flex-col gap-2 items-start">
+      <div className="flex-1 flex flex-col gap-2 items-start">
         {turn.isPlanResponse && (
           <span className="inline-flex items-center gap-1 text-xs font-medium text-violet-400 bg-violet-950/30 border border-violet-700/30 rounded-full px-2 py-0.5">
             <ClipboardList size={11} />
