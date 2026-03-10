@@ -17,6 +17,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Plugin system
 - Team workspaces
 
+### Known Issues
+- Terminal → Chat scroll synchronization not working (backlog)
+
+---
+
+## [1.0.3] - 2026-03-09
+
+### Bug Fixes
+- **"Latest" button scroll behavior** — Fixed the "Latest" button in chat that was only scrolling a small amount instead of going all the way to the bottom. Now uses animation flag to prevent scroll sync from interrupting smooth scroll animations.
+
+### Improvements
+- **Simplified scroll sync** — Removed debounce delay from scroll synchronization between Chat and Terminal. Scroll events now fire immediately for a more fluid experience, while maintaining echo prevention via the shared `scrollSyncManager`.
+
+### Technical Changes
+- Added `scrollSyncManager` utility for centralized scroll sync state management
+- Reduced sync lock timeout from 150ms to 100ms for better responsiveness
+- Maintained `requestAnimationFrame` usage for smooth rendering
+
 ---
 
 ## [1.0.2] - 2026-03-06
@@ -164,4 +182,7 @@ Claudia v1.0.0 — a professional macOS desktop application for managing, tracki
 
 ---
 
+[1.0.3]: https://github.com/gabrielcoralc/claudia/releases/tag/v1.0.3
+[1.0.2]: https://github.com/gabrielcoralc/claudia/releases/tag/v1.0.2
+[1.0.1]: https://github.com/gabrielcoralc/claudia/releases/tag/v1.0.1
 [1.0.0]: https://github.com/gabrielcoralc/claudia/releases/tag/v1.0.0

@@ -39,9 +39,13 @@ export default function App(): React.JSX.Element {
       const sess = session as Session
       updateSession(sess)
 
-      // If session has messages but cache is empty, invalidate and reload
+      // If session has messages but cache doesn't match DB count, invalidate and reload
+      // This handles two cases:
+      // 1. Cache is empty but DB has messages
+      // 2. Cache has partial messages (received via events) but DB has more
       const { selectedSessionId, messages, activeSubsessionId } = useSessionStore.getState()
-      if (sess.id === selectedSessionId && sess.messageCount > 0 && !messages[sess.id]?.length) {
+      const cachedMessageCount = messages[sess.id]?.length ?? 0
+      if (sess.id === selectedSessionId && sess.messageCount > 0 && cachedMessageCount < sess.messageCount) {
         invalidateMessages(sess.id)
       }
 
@@ -88,10 +92,9 @@ export default function App(): React.JSX.Element {
 
     const offMessageAdded = window.api.on('event:messageAdded', (data: unknown) => {
       const { sessionId, message } = data as { sessionId: string; message: ClaudeMessage }
-      const { selectedSessionId, activeSubsessionId } = useSessionStore.getState()
-      if (sessionId === selectedSessionId || sessionId === activeSubsessionId) {
-        addMessage(sessionId, message)
-      }
+      // Always add message to store, regardless of which session is currently selected
+      // This fixes the bug where messages arriving while viewing another session would be lost
+      addMessage(sessionId, message)
       loadSessions()
     })
 
