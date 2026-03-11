@@ -22,6 +22,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.6] - 2026-03-10
+
+### Bug Fixes
+- **Auto-updater fully working (FINAL FIX)** — Complete rewrite of the update installation flow for unsigned apps. Fixed multiple critical issues discovered during testing:
+  - Fixed cache directory detection (different paths in dev vs production)
+  - Fixed cache cleanup using `rm -rf` instead of `fs.rmSync()` (resolves `.asar` file issues)
+  - Fixed installation by removing old version before copying new one
+  - Removed redundant dialogs (now only 2 confirmation dialogs + 1 success message)
+  - Removed automatic app reopening (user opens manually from Applications)
+  - Added detailed logging throughout the process for debugging
+
+  **New simplified flow:**
+  1. "Update available" → User confirms download
+  2. Download progress visible
+  3. "Install now?" → User confirms installation
+  4. Automatic installation to /Applications/
+  5. "Update completed" → App closes
+  6. User opens new version from Applications
+
+  Tested end-to-end in development and production. Works reliably on unsigned macOS apps.
+
+---
+
 ## [1.0.5] - 2026-03-10
 
 ### Testing
