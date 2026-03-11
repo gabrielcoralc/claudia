@@ -7,11 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Bug Fixes
+- **Auto-updater not installing updates (CRITICAL FIX)** — Fixed the auto-updater completely failing to install updates on unsigned apps. The previous fix in v1.0.2 attempted to use `quitAndInstall()`, but this doesn't work on unsigned macOS apps due to Gatekeeper restrictions. **New solution**: Manual-assisted update flow that:
+  - Downloads and verifies the update ZIP
+  - Automatically unzips the new app version
+  - Opens Finder showing the new app with clear installation instructions
+  - Guides the user to replace the old version in /Applications/
+  - Properly closes the current app when ready
+
+  This ensures users can actually update the app until code signing is implemented. Includes test script and comprehensive testing documentation in `docs/MANUAL_UPDATE_TEST.md`.
+
 ### Planned
 - Session export (backup/sharing)
 - Custom themes and color schemes
 - Windows and Linux support
-- Code signing and notarization
+- Code signing and notarization (will enable automatic updates)
 - Intel Mac builds
 - Homebrew Cask distribution
 - Plugin system
