@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Session export (backup/sharing)
 - Custom themes and color schemes
 - Windows and Linux support
-- Code signing and notarization
+- Code signing and notarization (will enable automatic updates)
 - Intel Mac builds
 - Homebrew Cask distribution
 - Plugin system
@@ -19,6 +19,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Known Issues
 - Terminal → Chat scroll synchronization not working (backlog)
+
+---
+
+## [1.0.4] - 2026-03-10
+
+### Bug Fixes
+- **Auto-updater not installing updates (CRITICAL FIX)** — Fixed the auto-updater completely failing to install updates on unsigned apps. The previous fix in v1.0.2 attempted to use `quitAndInstall()`, but this doesn't work on unsigned macOS apps due to Gatekeeper restrictions. **New solution**: Manual-assisted update flow that:
+  - Downloads and verifies the update ZIP
+  - Automatically unzips the new app version
+  - Opens Finder showing the new app with clear installation instructions
+  - Guides the user to replace the old version in /Applications/
+  - Properly closes the current app when ready
+
+  This ensures users can actually update the app until code signing is implemented. Includes test script and comprehensive testing documentation in `docs/MANUAL_UPDATE_TEST.md`.
+
+### Important Notes
+- **For users on v1.0.2 or v1.0.3**: This version requires manual installation to bootstrap the new auto-updater. Future updates from v1.0.4 onwards will use the improved manual-assisted flow.
+- See `docs/AUTO_UPDATE_FIX.md` for technical details and testing instructions.
 
 ---
 
