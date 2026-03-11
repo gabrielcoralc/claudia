@@ -22,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.7] - 2026-03-10
+
+### Testing
+- **Auto-updater verification release** — Test version to verify the completely rewritten auto-updater works correctly in production. No functional changes from v1.0.6.
+
+---
+
 ## [1.0.6] - 2026-03-10
 
 ### Bug Fixes

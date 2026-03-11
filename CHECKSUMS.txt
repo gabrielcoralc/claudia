@@ -1,3 +1,6 @@
+5cfcea4d2137ab624cce73f449f749d249316b3c6084f6081887b0fb9125b33c  dist/Claudia-1.0.7-arm64.dmg
+f070dfa377f6e67e7318be14d10f715cced35fae496def866a3d033292839a22  dist/Claudia-1.0.7-arm64-mac.zip
+
 299a52d6162be4bf7f62fc854d2a5e8b8f4cbbd7abfd1741f73151005eaf6f0a  dist/Claudia-1.0.6-arm64.dmg
 04665de46acf6ff5ca2407fa8ecb0dd4bb6cd1b788561eda166ac8cd0881735b  dist/Claudia-1.0.6-arm64-mac.zip
 
