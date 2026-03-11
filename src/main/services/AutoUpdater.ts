@@ -103,117 +103,111 @@ async function handleManualUpdate(version: string): Promise<void> {
     const appPath = path.join(extractDir, appFile)
     console.log('✅ App descomprimida en:', appPath)
 
-    // Mostrar diálogo de confirmación antes de instalar
-    const result = await dialog.showMessageBox(win, {
+    // Mostrar diálogo informativo (sin opción de cancelar)
+    await dialog.showMessageBox(win, {
       type: 'info',
-      title: 'Actualización lista para instalar',
-      message: `Versión ${version} lista`,
+      title: 'Instalando actualización',
+      message: `Versión ${version} lista para instalar`,
       detail:
         'La actualización se instalará automáticamente en tu carpeta Applications.\n\n' +
         'La aplicación se cerrará después de instalar.\n' +
-        'Abre Claudia nuevamente desde Applications para usar la nueva versión.\n\n' +
-        '¿Continuar con la instalación?',
-      buttons: ['Instalar ahora', 'Más tarde'],
-      defaultId: 0,
-      cancelId: 1
+        'Abre Claudia nuevamente desde Applications para usar la nueva versión.',
+      buttons: ['Continuar'],
+      defaultId: 0
     })
 
-    if (result.response === 0) {
-      console.log('🔧 Usuario confirmó instalación, copiando a /Applications/...')
+    console.log('🔧 Instalando actualización en /Applications/...')
 
-      try {
-        // Instalar la nueva versión en /Applications/
-        const targetPath = '/Applications/Claudia.app'
-        console.log('🔧 Instalando nueva versión...')
-        console.log('🔧 Desde:', appPath)
-        console.log('🔧 Hacia:', targetPath)
+    try {
+      // Instalar la nueva versión en /Applications/
+      const targetPath = '/Applications/Claudia.app'
+      console.log('🔧 Instalando nueva versión...')
+      console.log('🔧 Desde:', appPath)
+      console.log('🔧 Hacia:', targetPath)
 
-        // PASO 1: Eliminar versión anterior si existe
-        if (fs.existsSync(targetPath)) {
-          console.log('🗑️  Eliminando versión anterior...')
-          await new Promise<void>((resolve, reject) => {
-            const rm = spawn('rm', ['-rf', targetPath])
-
-            rm.on('close', code => {
-              if (code === 0) {
-                console.log('✅ Versión anterior eliminada')
-                resolve()
-              } else {
-                reject(new Error(`rm exited with code ${code}`))
-              }
-            })
-
-            rm.on('error', reject)
-          })
-        }
-
-        // PASO 2: Copiar la nueva versión
-        console.log('📦 Copiando nueva versión...')
+      // PASO 1: Eliminar versión anterior si existe
+      if (fs.existsSync(targetPath)) {
+        console.log('🗑️  Eliminando versión anterior...')
         await new Promise<void>((resolve, reject) => {
-          const cp = spawn('cp', ['-R', appPath, targetPath])
+          const rm = spawn('rm', ['-rf', targetPath])
 
-          cp.stdout?.on('data', data => {
-            console.log('📦 cp stdout:', data.toString())
-          })
-
-          cp.stderr?.on('data', data => {
-            console.log('⚠️ cp stderr:', data.toString())
-          })
-
-          cp.on('close', code => {
-            console.log('🔧 cp proceso cerrado con código:', code)
+          rm.on('close', code => {
             if (code === 0) {
-              console.log('✅ Copia exitosa')
+              console.log('✅ Versión anterior eliminada')
               resolve()
             } else {
-              console.log('❌ cp falló con código:', code)
-              reject(new Error(`cp exited with code ${code}`))
+              reject(new Error(`rm exited with code ${code}`))
             }
           })
 
-          cp.on('error', err => {
-            console.log('❌ cp error event:', err)
-            reject(err)
-          })
+          rm.on('error', reject)
         })
-
-        console.log('✅ Nueva versión instalada correctamente en:', targetPath)
-
-        // Limpiar caché después de instalación exitosa
-        console.log('🧹 Limpiando caché de actualización...')
-        spawn('rm', ['-rf', extractDir], { detached: true })
-        console.log('✅ Caché limpiado en background')
-
-        // Mostrar diálogo de éxito antes de cerrar
-        await dialog.showMessageBox(win, {
-          type: 'info',
-          title: 'Actualización completada',
-          message: `Versión ${version} instalada correctamente`,
-          detail:
-            '✅ La actualización se instaló exitosamente.\n\n' +
-            'La aplicación se cerrará ahora.\n' +
-            'Abre Claudia desde Applications para usar la nueva versión.',
-          buttons: ['Entendido'],
-          defaultId: 0
-        })
-
-        console.log('🔄 Cerrando app...')
-
-        // Cerrar la app
-        setTimeout(() => {
-          app.quit()
-        }, 500)
-      } catch (copyError) {
-        console.error('❌ Error al copiar la app:', copyError)
-        dialog.showErrorBox(
-          'Error al instalar',
-          `No se pudo instalar la actualización: ${copyError.message}\n\n` +
-            'Puedes instalarla manualmente desde:\n' +
-            appPath
-        )
       }
-    } else {
-      console.log('Usuario decidió no instalar ahora')
+
+      // PASO 2: Copiar la nueva versión
+      console.log('📦 Copiando nueva versión...')
+      await new Promise<void>((resolve, reject) => {
+        const cp = spawn('cp', ['-R', appPath, targetPath])
+
+        cp.stdout?.on('data', data => {
+          console.log('📦 cp stdout:', data.toString())
+        })
+
+        cp.stderr?.on('data', data => {
+          console.log('⚠️ cp stderr:', data.toString())
+        })
+
+        cp.on('close', code => {
+          console.log('🔧 cp proceso cerrado con código:', code)
+          if (code === 0) {
+            console.log('✅ Copia exitosa')
+            resolve()
+          } else {
+            console.log('❌ cp falló con código:', code)
+            reject(new Error(`cp exited with code ${code}`))
+          }
+        })
+
+        cp.on('error', err => {
+          console.log('❌ cp error event:', err)
+          reject(err)
+        })
+      })
+
+      console.log('✅ Nueva versión instalada correctamente en:', targetPath)
+
+      // Limpiar caché después de instalación exitosa
+      console.log('🧹 Limpiando caché de actualización...')
+      spawn('rm', ['-rf', extractDir], { detached: true })
+      console.log('✅ Caché limpiado en background')
+
+      // Mostrar diálogo de éxito antes de cerrar
+      await dialog.showMessageBox(win, {
+        type: 'info',
+        title: 'Actualización completada',
+        message: `Versión ${version} instalada correctamente`,
+        detail:
+          '✅ La actualización se instaló exitosamente.\n\n' +
+          'La aplicación se cerrará ahora.\n' +
+          'Abre Claudia desde Applications para usar la nueva versión.',
+        buttons: ['Entendido'],
+        defaultId: 0
+      })
+
+      console.log('🔄 Cerrando app...')
+
+      // Cerrar la app
+      setTimeout(() => {
+        app.quit()
+      }, 500)
+    } catch (copyError) {
+      console.error('❌ Error al copiar la app:', copyError)
+      dialog.showErrorBox(
+        'Error al instalar',
+        `No se pudo instalar la actualización: ${copyError.message}\n\n` +
+          'Puedes instalarla manualmente desde:\n' +
+          appPath
+      )
     }
   } catch (error) {
     console.error('❌ Error al procesar actualización:', error)

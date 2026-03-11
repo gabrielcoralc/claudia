@@ -22,10 +22,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.7] - 2026-03-10
+## [1.0.8] - 2026-03-10
+
+### Improvements
+- **Ultra-simplified update flow** — Final refinement of the auto-updater UX. User only makes ONE decision (download or not). After confirming download, installation proceeds automatically with clear informative dialogs. No option to postpone after download.
+
+  **Complete flow:**
+  1. "Download update?" → [Download, Later] ← Only decision point
+  2. [Automatic download with progress]
+  3. "Update will be installed. App will close." → [Continue] ← Informative only
+  4. [Automatic installation to /Applications/]
+  5. "✅ Update completed. Open Claudia from Applications." → [OK]
+  6. [App closes automatically]
 
 ### Testing
-- **Auto-updater verification release** — Test version to verify the completely rewritten auto-updater works correctly in production. No functional changes from v1.0.6.
+- **Production verification release** — Test version to verify the final auto-updater flow works perfectly in production on unsigned macOS apps.
+
+---
+
+## [1.0.7] - 2026-03-10
+
+### Improvements
+- **Simplified update flow** — Removed "Install now / Later" option after download. Once user confirms download, installation proceeds automatically with just an informative dialog. Cleaner UX with only one decision point (download or not).
+
+### Testing
+- **Auto-updater verification release** — Test version to verify the completely rewritten auto-updater works correctly in production.
 
 ---
 
