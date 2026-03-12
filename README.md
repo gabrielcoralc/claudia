@@ -1,5 +1,13 @@
 <div align="center">
 
+> 🌍 **English** | **[Español](README_SPANISH.md)**
+
+</div>
+
+---
+
+<div align="center">
+
 <img alt="Claudia - Professional Session Manager for Claude Code" src="docs/banner.png" width="100%">
 
 <br/>
