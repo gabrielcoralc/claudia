@@ -22,31 +22,11 @@
 
 <div align="center">
 
-### Session Management
-> Launch, track, and manage multiple Claude Code sessions from a single interface
+[![Watch the demo](https://img.youtube.com/vi/sQnJqRyVTVU/maxresdefault.jpg)](https://youtu.be/sQnJqRyVTVU)
 
-<!-- Replace with actual GIF/screenshot: docs/screenshots/session-management.gif -->
-<img src="https://placehold.co/800x450/1a1a2e/d4745f?text=Session+Management&font=raleway" alt="Session Management" width="80%"/>
-
-<br/><br/>
-
-### Live Terminal & Chat
-> Watch Claude work in real-time with integrated terminal and conversation history
-
-<!-- Replace with actual GIF/screenshot: docs/screenshots/terminal-chat.gif -->
-<img src="https://placehold.co/800x450/1a1a2e/d4745f?text=Live+Terminal+%26+Chat&font=raleway" alt="Live Terminal & Chat" width="80%"/>
-
-<br/><br/>
-
-### Analytics Dashboard
-> Track estimated costs, token usage, and project metrics with interactive charts
-
-<!-- Replace with actual GIF/screenshot: docs/screenshots/analytics.gif -->
-<img src="https://placehold.co/800x450/1a1a2e/d4745f?text=Analytics+Dashboard&font=raleway" alt="Analytics Dashboard" width="80%"/>
+**▶️ Click to watch the full demo on YouTube**
 
 </div>
-
-> 💡 **Tip:** Replace the placeholders above with actual GIFs/screenshots saved to `docs/screenshots/`.
 
 ---
 
